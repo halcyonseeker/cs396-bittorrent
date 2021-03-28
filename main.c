@@ -11,13 +11,23 @@
 
 #include "bencode/bencode.h"
 
-//#define DEBUG
-
 #define USAGE "\
 Usage: bitclient [-vh] file1.torrent, ...\n\
     Options:\n\
         -v || --verbose        Log verbosely\n\
         -h || --help           Print this message and exit\n"
+
+#define dbg(...)                                                \
+    fputs("\033[1;38;5;9mDEBUG\033[m: ", stderr);               \
+    fprintf(stderr, __VA_ARGS__);                               \
+    fputs("\n", stderr);
+
+#define vlog(...)                                               \
+    if (log_verbosely) {                                        \
+        fputs("\033[1;38;5;6mLOG\033[m: ", stdout);             \
+        printf(__VA_ARGS__);                                    \
+        fputs("\n", stdout);                                    \
+    }
 
 static int log_verbosely = 0;
 
@@ -29,29 +39,6 @@ typedef struct {
     be_node_t *data;
     struct torrent *next;
 } torrent;
-
-/**
- * Log what we're doing if the verbose flag was passed
- */
-void
-vlog(const char *log)
-{
-    if (log_verbosely)
-        puts(log);
-}
-
-/**
- * Print debugging information
- */
-void
-dbg(const char *msg)
-{
-#ifdef DEBUG
-    fprintf(stderr, "\033[1;38;5;9mDEBUG\033[m: %s\n", msg);
-#else  /* Stop "unused argument" compiler warnings */
-    if (msg == NULL) msg++;
-#endif
-}
 
 /**  
  * Take the filename of a torrent file, open it, and parse to the torrent
