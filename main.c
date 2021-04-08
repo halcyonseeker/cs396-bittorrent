@@ -19,14 +19,12 @@ Usage: bitclient [-vh] file1.torrent, ...\n\
 
 #define dbg(...)                                                \
     fputs("\033[1;38;5;9mDEBUG\033[m: ", stderr);               \
-    fprintf(stderr, __VA_ARGS__);                               \
-    fputs("\n", stderr);
+    fprintf(stderr, __VA_ARGS__);
 
 #define vlog(...)                                               \
     if (log_verbosely) {                                        \
         fputs("\033[1;38;5;6mLOG\033[m: ", stdout);             \
         printf(__VA_ARGS__);                                    \
-        fputs("\n", stdout);                                    \
     }
 
 static int log_verbosely = 0;
