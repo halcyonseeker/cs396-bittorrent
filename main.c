@@ -126,7 +126,12 @@ main(int argc, char *argv[])
             return 0;
         } else {
             if ((torrent_current = open_torrent(argv[i])) != NULL) {
-                if (torrent_head == NULL) torrent_head = torrent_current;
+                if (torrent_head == NULL)
+                    torrent_head = torrent_current;
+                else {
+                    torrent_current->next = torrent_head;
+                    torrent_head = torrent_current;
+                }
                 vlog("Successfully parsed torrent file\n");
             } else {
                 fputs(USAGE, stderr);
