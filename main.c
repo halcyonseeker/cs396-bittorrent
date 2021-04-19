@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "bencode/bencode.h"
 
@@ -110,6 +111,8 @@ int
 main(int argc, char *argv[])
 {
     torrent_t *torrent_head = NULL, *torrent_current = NULL;
+
+    int pt_num = 0;
     
     if (argc < 2) {
         fputs(USAGE, stderr);
@@ -132,7 +135,7 @@ main(int argc, char *argv[])
                     torrent_current->next = torrent_head;
                     torrent_head = torrent_current;
                 }
-                vlog("Successfully parsed torrent file\n");
+                vlog("Successfully parsed torrent file %s\n", argv[i]);
             } else {
                 fputs(USAGE, stderr);
                 dbg("open_torrent() returned NULL");
@@ -166,6 +169,9 @@ main(int argc, char *argv[])
      */
 
     /* Launch a new thread for each torrent */
+    for (torrent_t *t = torrent_head; t != NULL; t = t->next, pt_num++) {
+        vlog("Launching torrent thread #%i\n", pt_num);
+    }
 
     /* TODO: free the linked list and decoded data */
 
