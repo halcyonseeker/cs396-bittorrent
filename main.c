@@ -18,7 +18,7 @@ Usage: bitclient [-vh] file1.torrent, ...\n\
         -h || --help           Print this message and exit\n"
 
 #define dbg(...)                                                \
-    fputs("\033[1;38;5;9mDEBUG\033[m: ", stderr);               \
+    fputs("\033[1;38;5;1mDEBUG\033[m: ", stderr);               \
     fprintf(stderr, __VA_ARGS__);
 
 #define vlog(...)                                               \
