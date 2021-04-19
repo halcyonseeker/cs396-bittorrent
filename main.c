@@ -111,7 +111,7 @@ main(int argc, char *argv[])
     
     if (argc < 2) {
         fputs(USAGE, stderr);
-        dbg("No arguments were provided");
+        dbg("No arguments were provided\n");
         return 1;
     }
 
@@ -125,7 +125,7 @@ main(int argc, char *argv[])
         } else {
             if ((torrent_current = open_torrent(argv[i])) != NULL) {
                 if (torrent_head == NULL) torrent_head = torrent_current;
-                vlog("Successfully parsed torrent file");
+                vlog("Successfully parsed torrent file\n");
             } else {
                 fputs(USAGE, stderr);
                 dbg("open_torrent() returned NULL");
@@ -137,7 +137,7 @@ main(int argc, char *argv[])
 
     if (torrent_head == NULL) {
         fputs(USAGE, stderr);
-        dbg("torrent_head is NULL");
+        dbg("torrent_head is NULL\n");
         return 1;
     }
 
