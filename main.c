@@ -33,19 +33,21 @@ static int log_verbosely = 0;
  * Torrent files are passed on the command line, we'll store them in a 
  * linked list. The data field is a pointer to the data from the .torrent file
  */
-typedef struct {
+struct torrent {
     be_node_t *data;
     struct torrent *next;
-} torrent;
+};
+
+typedef struct torrent torrent_t;
 
 /**  
  * Take the filename of a torrent file, open it, and parse to the torrent
  * struct. Return a pointer to it iff it is successfully opened and parsed.
  */
-torrent *
+torrent_t *
 open_torrent(char *filename)
 {
-    torrent *t = NULL;
+    torrent_t *t = NULL;
     char *buf = NULL;
     FILE *fp = NULL;
     long buflen = 0;
@@ -78,7 +80,7 @@ open_torrent(char *filename)
     }
 
     /* Allocate the torrent struct */
-    if ((t = calloc(1, sizeof(torrent))) == NULL) {
+    if ((t = calloc(1, sizeof(torrent_t))) == NULL) {
         perror("calloc");
         return NULL;
     }
@@ -107,7 +109,7 @@ open_torrent(char *filename)
 int
 main(int argc, char *argv[])
 {
-    torrent *torrent_head = NULL, *torrent_current = NULL;
+    torrent_t *torrent_head = NULL, *torrent_current = NULL;
     
     if (argc < 2) {
         fputs(USAGE, stderr);
