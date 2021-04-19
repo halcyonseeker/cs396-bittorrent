@@ -141,9 +141,24 @@ main(int argc, char *argv[])
         return 1;
     }
 
-    /* TODO: wtf king of data structure is be_node_t */
+    /*
+     * Bencode data are stored in a doubly linked list. Each node contains a
+     * be_type enum specifying the type of data in this node, and a union
+     * containing said data:
+     * be_type:
+     *   STR:  a bencode string
+     *         union is be_str_t containing a string and its length
+     *   NUM:  a bencode integer
+     *         union is a long long int
+     *   LIST: a bencode list
+     *         union is a list_t pointing to the head of a doubly linked list
+     *         --- FIXME: where is the data of the linked list??
+     *   DICT: a bencode dictionary
+     *         union is a list_t pointing to the head of a doubly linked list
+     *         --- FIXME where is the data of the linked list, the be_dict_t??
+     */
 
-    /* TODO: do torrent things */
+    /* Launch a new thread for each torrent */
 
     /* TODO: free the linked list and decoded data */
 
