@@ -41,6 +41,23 @@ struct torrent {
 
 typedef struct torrent torrent_t;
 
+/**
+ * Start the process of downloading a torrent. Takes a pointer to a .torrent
+ * file's bencode data.
+ *
+ * We'll want to incrementally save files to disk in order to not use too
+ * much memory, so I'm not sure what to do with the return value.
+ */
+void *
+thread_main(void *raw)
+{
+    be_node_t *torrent = (be_node_t *)raw;
+
+    printf("Hello from thread with torrent pointer %li\n", (ssize_t)torrent);
+
+    return NULL;
+}
+
 /**  
  * Take the filename of a torrent file, open it, and parse to the torrent
  * struct. Return a pointer to it iff it is successfully opened and parsed.
@@ -112,7 +129,7 @@ main(int argc, char *argv[])
 {
     torrent_t *torrent_head = NULL, *torrent_current = NULL;
 
-    int pt_num = 0;
+    int nthreads = 0, tnum = 0;
     
     if (argc < 2) {
         fputs(USAGE, stderr);
@@ -136,6 +153,7 @@ main(int argc, char *argv[])
                     torrent_head = torrent_current;
                 }
                 vlog("Successfully parsed torrent file %s\n", argv[i]);
+                nthreads++;
             } else {
                 fputs(USAGE, stderr);
                 dbg("open_torrent() returned NULL");
@@ -144,6 +162,8 @@ main(int argc, char *argv[])
             }
         }
     }
+
+    pthread_t threads[nthreads];
 
     if (torrent_head == NULL) {
         fputs(USAGE, stderr);
@@ -169,8 +189,19 @@ main(int argc, char *argv[])
      */
 
     /* Launch a new thread for each torrent */
-    for (torrent_t *t = torrent_head; t != NULL; t = t->next, pt_num++) {
-        vlog("Launching torrent thread #%i\n", pt_num);
+    for (torrent_t *t = torrent_head; t != NULL; t = t->next, tnum++) {
+        if (pthread_create(&threads[tnum], NULL, thread_main, t->data) != 0) {
+            perror("pthread_create");
+            return 1;
+        } else vlog("Launched torrent thread #%i\n", tnum);
+    }
+
+    /* Join the threads */
+    for (tnum = 0; tnum < nthreads; tnum++) {
+        if (pthread_join(threads[tnum], NULL) != 0) {
+            perror("pthread_join");
+            return 1;
+        } else vlog("Joined torrent thread #%i with main\n", tnum);
     }
 
     /* TODO: free the linked list and decoded data */
