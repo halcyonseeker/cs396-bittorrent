@@ -16,17 +16,17 @@
     "\
 Usage: bitclient [-vh] file1.torrent, ...\n\
     Options:\n\
-        -v || --verbose        Log verbosely\n\
+        -v || --verbose        Log debugging information\n\
         -h || --help           Print this message and exit\n"
 
-#define dbg(...)                                                               \
-    fputs("\033[1;38;5;1mDEBUG\033[m: ", stderr);                              \
+#define FATAL(...)                                                             \
+    fputs("\033[1;38;5;1mFATAL\033[m: ", stderr);                              \
     fprintf(stderr, __VA_ARGS__);
 
-#define vlog(...)                                                              \
+#define DEBUG(...)                                                             \
     if (log_verbosely) {                                                       \
-        fputs("\033[1;38;5;6mLOG\033[m: ", stdout);                            \
-        printf(__VA_ARGS__);                                                   \
+        fputs("\033[1;38;5;6mDEBUG\033[m: ", stderr);                          \
+        fprintf(stderr, __VA_ARGS__);                                          \
     }
 
 static int log_verbosely = 0;
@@ -138,7 +138,7 @@ main(int argc, char *argv[])
 
     if (argc < 2) {
         fputs(USAGE, stderr);
-        dbg("No arguments were provided\n");
+        FATAL("No arguments were provided\n");
         return 1;
     }
 
@@ -157,12 +157,12 @@ main(int argc, char *argv[])
                     torrent_current->next = torrent_head;
                     torrent_head          = torrent_current;
                 }
-                vlog("Successfully parsed torrent file %s\n", argv[i]);
+                DEBUG("Successfully parsed torrent file %s\n", argv[i]);
                 nthreads++;
             } else {
                 fputs(USAGE, stderr);
-                dbg("open_torrent() returned NULL");
-                fputs("A file either doesn't exist or is garbled\n", stderr);
+                FATAL("open_torrent() returned NULL\n");
+                FATAL("A file either doesn't exist or is garbled\n");
                 return 1;
             }
         }
@@ -172,7 +172,7 @@ main(int argc, char *argv[])
 
     if (torrent_head == NULL) {
         fputs(USAGE, stderr);
-        dbg("torrent_head is NULL\n");
+        FATAL("torrent_head is NULL\n");
         return 1;
     }
 
@@ -198,8 +198,9 @@ main(int argc, char *argv[])
         if (pthread_create(&threads[tnum], NULL, thread_main, t->data) != 0) {
             perror("pthread_create");
             return 1;
-        } else
-            vlog("Launched torrent thread #%i\n", tnum);
+        } else {
+            DEBUG("Launched torrent thread #%i\n", tnum);
+        }
     }
 
     /* Join the threads */
@@ -207,8 +208,9 @@ main(int argc, char *argv[])
         if (pthread_join(threads[tnum], NULL) != 0) {
             perror("pthread_join");
             return 1;
-        } else
-            vlog("Joined torrent thread #%i with main\n", tnum);
+        } else {
+            DEBUG("Joined torrent thread #%i with main\n", tnum);
+        }
     }
 
     /* TODO: free the linked list and decoded data */
