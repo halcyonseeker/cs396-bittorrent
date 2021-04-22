@@ -35,12 +35,10 @@ static int log_verbosely = 0;
  * Torrent files are passed on the command line, we'll store them in a
  * linked list. The data field is a pointer to the data from the .torrent file
  */
-struct torrent {
+typedef struct torrent {
     be_node_t *     data;
     struct torrent *next;
-};
-
-typedef struct torrent torrent_t;
+} torrent_t;
 
 /**
  * Start the process of downloading a torrent. Takes a pointer to a .torrent
