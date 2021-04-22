@@ -4,38 +4,39 @@
  */
 
 #include <errno.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #include "bencode/bencode.h"
 
-#define USAGE "\
+#define USAGE                                                                  \
+    "\
 Usage: bitclient [-vh] file1.torrent, ...\n\
     Options:\n\
         -v || --verbose        Log verbosely\n\
         -h || --help           Print this message and exit\n"
 
-#define dbg(...)                                                \
-    fputs("\033[1;38;5;1mDEBUG\033[m: ", stderr);               \
+#define dbg(...)                                                               \
+    fputs("\033[1;38;5;1mDEBUG\033[m: ", stderr);                              \
     fprintf(stderr, __VA_ARGS__);
 
-#define vlog(...)                                               \
-    if (log_verbosely) {                                        \
-        fputs("\033[1;38;5;6mLOG\033[m: ", stdout);             \
-        printf(__VA_ARGS__);                                    \
+#define vlog(...)                                                              \
+    if (log_verbosely) {                                                       \
+        fputs("\033[1;38;5;6mLOG\033[m: ", stdout);                            \
+        printf(__VA_ARGS__);                                                   \
     }
 
 static int log_verbosely = 0;
 
-/** 
- * Torrent files are passed on the command line, we'll store them in a 
+/**
+ * Torrent files are passed on the command line, we'll store them in a
  * linked list. The data field is a pointer to the data from the .torrent file
  */
 struct torrent {
-    be_node_t *data;
+    be_node_t *     data;
     struct torrent *next;
 };
 
@@ -58,18 +59,18 @@ thread_main(void *raw)
     return NULL;
 }
 
-/**  
+/**
  * Take the filename of a torrent file, open it, and parse to the torrent
  * struct. Return a pointer to it iff it is successfully opened and parsed.
  */
 torrent_t *
 open_torrent(char *filename)
 {
-    torrent_t *t = NULL;
-    char *buf = NULL;
-    FILE *fp = NULL;
-    long buflen = 0;
-    size_t read_amount;
+    torrent_t *t      = NULL;
+    char *     buf    = NULL;
+    FILE *     fp     = NULL;
+    long       buflen = 0;
+    size_t     read_amount;
 
     /* Open the file */
     if ((fp = fopen(filename, "r")) == NULL) {
@@ -92,7 +93,7 @@ open_torrent(char *filename)
     buflen++;
 
     /* Allocate the buffer to be passed to be_decode() */
-    if ((buf = (char*)calloc(buflen, sizeof(char))) == NULL) {
+    if ((buf = (char *)calloc(buflen, sizeof(char))) == NULL) {
         perror("calloc");
         return NULL;
     }
@@ -104,7 +105,7 @@ open_torrent(char *filename)
     }
 
     /* Read the torrent file into buf for passing to be_decode() */
-    if (fread((void*)buf, sizeof(char), buflen, fp) < (size_t)buflen-1) {
+    if (fread((void *)buf, sizeof(char), buflen, fp) < (size_t)buflen - 1) {
         perror("fread");
         return NULL;
     }
@@ -134,7 +135,7 @@ main(int argc, char *argv[])
     torrent_t *torrent_head = NULL, *torrent_current = NULL;
 
     int nthreads = 0, tnum = 0;
-    
+
     if (argc < 2) {
         fputs(USAGE, stderr);
         dbg("No arguments were provided\n");
@@ -154,7 +155,7 @@ main(int argc, char *argv[])
                     torrent_head = torrent_current;
                 else {
                     torrent_current->next = torrent_head;
-                    torrent_head = torrent_current;
+                    torrent_head          = torrent_current;
                 }
                 vlog("Successfully parsed torrent file %s\n", argv[i]);
                 nthreads++;
@@ -197,7 +198,8 @@ main(int argc, char *argv[])
         if (pthread_create(&threads[tnum], NULL, thread_main, t->data) != 0) {
             perror("pthread_create");
             return 1;
-        } else vlog("Launched torrent thread #%i\n", tnum);
+        } else
+            vlog("Launched torrent thread #%i\n", tnum);
     }
 
     /* Join the threads */
@@ -205,7 +207,8 @@ main(int argc, char *argv[])
         if (pthread_join(threads[tnum], NULL) != 0) {
             perror("pthread_join");
             return 1;
-        } else vlog("Joined torrent thread #%i with main\n", tnum);
+        } else
+            vlog("Joined torrent thread #%i with main\n", tnum);
     }
 
     /* TODO: free the linked list and decoded data */
