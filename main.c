@@ -206,7 +206,7 @@ main(int argc, char *argv[])
 
     /* Launch a new thread for each torrent */
     for (torrent_t *t = torrent_head; t != NULL; t = t->next, tnum++) {
-        if (pthread_create(&threads[tnum], NULL, thread_main, t->data) != 0) {
+        if (pthread_create(&threads[tnum], NULL, thread_main, t) != 0) {
             perror("pthread_create");
             return 1;
         } else {
