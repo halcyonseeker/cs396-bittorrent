@@ -59,19 +59,15 @@ typedef struct torrent {
 
 /**
  * Start the process of downloading a torrent. Takes a pointer to a .torrent
- * file's bencode data.
- *
- * We'll want to incrementally save files to disk in order to not use too
- * much memory, so I'm not sure what to do with the return value.
+ * file. Returns a pointer to the torrent file if everything went okay and
+ * NULL on failure.
  */
 void *
 thread_main(void *raw)
 {
-    be_node_t *torrent = (be_node_t *)raw;
+    torrent_t *torrent = (torrent_t *)raw;
 
-    printf("Hello from thread with torrent pointer %li\n", (ssize_t)torrent);
-
-    return NULL;
+    return torrent;
 }
 
 /**
