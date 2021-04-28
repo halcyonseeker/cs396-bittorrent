@@ -33,10 +33,27 @@ static int log_verbosely = 0;
 
 /**
  * Torrent files are passed on the command line, we'll store them in a
- * linked list. The data field is a pointer to the data from the .torrent file
+ * linked list of torrent_t structs. The data field is a pointer to the
+ * data from the .torrent file and the other fields contain the bencoded
+ * information that we'll actually use. The chunks_t struct contains the
+ * the information required to validate and serialize the data we get
+ * from peers.
  */
+typedef long long int be_num_t;
+
+typedef struct chunks {
+    int             num;
+    char           *checksum;
+    struct chunks *next;
+} chunks_t;
+
 typedef struct torrent {
     be_node_t *     data;
+    be_num_t        piece_len;
+    be_num_t        file_len;
+    chunks_t *      pieces;
+    char *          filename;
+    char *          announce;
     struct torrent *next;
 } torrent_t;
 
