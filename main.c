@@ -1,6 +1,7 @@
 /*
  * main.c: A simple BitTorrent client
  * Thalia Wright <wrightng@reed.edu>
+ * DUE MAY 10
  */
 
 #include <errno.h>
@@ -10,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "bencode/list.h"
 #include "bencode/bencode.h"
 
 #define USAGE                                                                  \
@@ -198,10 +200,9 @@ main(int argc, char *argv[])
      *         union is a long long int
      *   LIST: a bencode list
      *         union is a list_t pointing to the head of a doubly linked list
-     *         --- FIXME: where is the data of the linked list??
      *   DICT: a bencode dictionary
      *         union is a list_t pointing to the head of a doubly linked list
-     *         --- FIXME where is the data of the linked list, the be_dict_t??
+     * Note that this bencode library uses a Linux-style intrusive linked list
      */
 
     /* Launch a new thread for each torrent */
