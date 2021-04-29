@@ -172,22 +172,6 @@ main(int argc, char *argv[])
         return 1;
     }
 
-    /*
-     * Bencode data are stored in a doubly linked list. Each node contains a
-     * be_type enum specifying the type of data in this node, and a union
-     * containing said data:
-     * be_type:
-     *   STR:  a bencode string
-     *         union is be_str_t containing a string and its length
-     *   NUM:  a bencode integer
-     *         union is a long long int
-     *   LIST: a bencode list
-     *         union is a list_t pointing to the head of a doubly linked list
-     *   DICT: a bencode dictionary
-     *         union is a list_t pointing to the head of a doubly linked list
-     * Note that this bencode library uses a Linux-style intrusive linked list
-     */
-
     /* Launch a new thread for each torrent */
     for (torrent_t *t = torrent_head; t != NULL; t = t->next, tnum++) {
         if (pthread_create(&threads[tnum], NULL, thread_main, t) != 0) {

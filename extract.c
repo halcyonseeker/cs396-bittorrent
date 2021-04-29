@@ -10,6 +10,12 @@
 #include "extract.h"
 #include "bitclient.h"
 
+/**
+ * Helper function to extract the announce URL from the torrent data.
+ * It takes a pointer to a the "announce" entry of the main dictionary,
+ * a torrent_t struct into which to insert the value, and it returns
+ * 0 on success.
+ */
 static int
 extract_announce(be_dict_t *d, torrent_t *t)
 {
@@ -32,6 +38,11 @@ extract_announce(be_dict_t *d, torrent_t *t)
     return 0;
 }
 
+/**
+ * Helper function to extract the name of the file we're downloading from
+ * the info dictionary. It takes a pointer to the dictionary entry and one
+ * to the torrent_t struct into which to insert the name. Returns 0 on success
+ */
 static int
 extract_info_name(be_dict_t *d, torrent_t *t)
 {
@@ -53,6 +64,10 @@ extract_info_name(be_dict_t *d, torrent_t *t)
 }
 
 /**
+ * Helper function to extract the peices' sha1 hashes from D's value field
+ * and place their hexadecimal digests into a linked list in T. Returns 0
+ * on success.
+ *
  * The value field in this dictionary is a concatenation of 20-byte piece
  * sha1 hashes. Note that this logic assumes a single-file torrent.
  */
@@ -144,51 +159,52 @@ extract_from_bencode(torrent_t *t)
     if (t == NULL) return 1;
 
     /*
-    * The bencode library uses intrusively linked lists which I'm traversing
-    * using macros defined in bencode/list.h. Apparently this is what they
-    * use in the Linux Kernel but it makes me *profoundly* uncomfortable.
-    */
+     * Torrent metadata are stored in a dictionary (be_dict_t) where the 
+     * key is some standard string and the value can be any of the following
+     * types encapsulated inside a be_node_t. be_node_t's contain an enum
+     * specifying the data a type and a union containing the data:
+     *
+     *   STR:  a bencode string
+     *         union is be_str_t containing a string and its length
+     *   NUM:  a bencode integer
+     *         union is a long long int (typedef'd here to be_num_t for 
+     *         brevity)
+     *   DICT: a bencode dictionary
+     *         union is a list_t pointing to the head of a doubly linked list
+     *   LIST: a bencode list
+     *         union is a list_t pointing to the head of a doubly linked list
+     *
+     * The bencode library uses intrusively linked lists which I'm traversing
+     * using macros defined in bencode/list.h. Apparently this is what they
+     * use in the Linux Kernel but it makes me *profoundly* uncomfortable.
+     */
 
     list_for_each(top_position, &t->data->x.dict_head) {
         e = list_entry(top_position, be_dict_t, link);
 
-        int ra  = strncmp(e->key.buf, "announce", (size_t)e->key.len);
-        int ri  = strncmp(e->key.buf, "info", e->key.len);
-        /* Optional */
-        int ral = strncmp(e->key.buf, "announce-list", (size_t)e->key.len);
-        int rcd = strncmp(e->key.buf, "creation date", (size_t)e->key.len);
-        int rc  = strncmp(e->key.buf, "comment", (size_t)e->key.len);
-        int rcb = strncmp(e->key.buf, "created by", (size_t)e->key.len);
-        int re  = strncmp(e->key.buf, "encoding", (size_t)e->key.len);
-
-        if (ra == 0) {         /* announce */
+        if (!strncmp(e->key.buf, "announce", (size_t)e->key.len)) {
             if (extract_announce(e, t) != 0) {
                 perror("extract_announce");
                 return 1;
             }
 
-        } else if (ri == 0) {   /* info */
+        } else if (!strncmp(e->key.buf, "info", e->key.len)) {
             list_for_each(info_position, &e->val->x.dict_head) {
                 se = list_entry(info_position, be_dict_t, link);
 
-                int ril  = strncmp(se->key.buf, "length", (size_t)se->key.len);
-                int rin  = strncmp(se->key.buf, "name", (size_t)se->key.len);
-                int ripl = strncmp(se->key.buf, "piece length", (size_t)se->key.len);
-                int rip  = strncmp(se->key.buf, "pieces", (size_t)se->key.len);
-
-                if (ril == 0) {          /* length */
+                if (!strncmp(se->key.buf, "length", (size_t)se->key.len)) {
                     t->file_len = se->val->x.num;
 
-                } else if (rin == 0) {   /* name */
+                } else if (!strncmp(se->key.buf, "name", (size_t)se->key.len)) {
                     if (extract_info_name(se, t) != 0) {
                         perror("extract_info_name");
                         return 1;
                     }
 
-                } else if (ripl == 0) {  /* piece length */
+                } else if (!strncmp(se->key.buf, "piece length", (size_t)se->key.len)) {
                     t->piece_len = se->val->x.num;
 
-                } else if (rip == 0) {   /* pieces */
+                } else if (!strncmp(se->key.buf, "pieces", (size_t)se->key.len)) {
                     if (extract_info_pieces(se, t) != 0) {
                         perror("extract_info_pieces");
                         return 1;
@@ -197,23 +213,23 @@ extract_from_bencode(torrent_t *t)
             }
             be_dict_free(se);
 
-        } else if (ral == 0) {  /* announce-list (optional) */
+        } else if (!strncmp(e->key.buf, "announce-list", (size_t)e->key.len)) {
             be_free(e->val);
             continue;
 
-        } else if (rcd == 0) {  /* creation date (optional) */
+        } else if (!strncmp(e->key.buf, "creation date", (size_t)e->key.len)) {
             be_free(e->val);
             continue;
 
-        } else if (rc == 0) {   /* comment (optional */
+        } else if (!strncmp(e->key.buf, "comment", (size_t)e->key.len)) {
             be_free(e->val);
             continue;
 
-        } else if (rcb == 0) {  /* created by (optional) */
+        } else if (!strncmp(e->key.buf, "created by", (size_t)e->key.len)) {
             be_free(e->val);
             continue;
 
-        } else if (re == 0) {   /* encoding (optional) */
+        } else if (!strncmp(e->key.buf, "encoding", (size_t)e->key.len)) {
             be_free(e->val);
             continue;
         }
