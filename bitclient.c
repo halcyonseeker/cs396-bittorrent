@@ -207,7 +207,22 @@ main(int argc, char *argv[])
         }
     }
 
-    /* TODO: free the linked list and decoded data */
+    /* Free the torrents */
+    torrent_t *t_save;
+    chunk_t   *c_save;
+    for (torrent_t *t = torrent_head; t != NULL; t = t_save) {
+        if (t->filename != NULL) free(t->filename);
+        if (t->announce != NULL) free(t->announce);
+        if (t->pieces != NULL) {
+            for (chunk_t *c = t->pieces; c != NULL; c = c_save) {
+                if (c->checksum != NULL) free(c->checksum);
+                c_save = c->next;
+                free(c);
+            }
+        }
+        t_save = t->next;
+        free(t);
+    }
 
     return 0;
 }
