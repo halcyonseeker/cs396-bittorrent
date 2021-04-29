@@ -27,6 +27,8 @@ extract_announce(be_dict_t *d, torrent_t *t)
         return errno;
     }
 
+    be_free(d->val);
+
     return 0;
 }
 
@@ -102,7 +104,6 @@ extract_info_pieces(be_dict_t *d, torrent_t *t)
     return 0;
 }
 
-
 /**
  * "My name is extract_from_bencode, extractor of important data:
  *  Look on my horrible spaghetti, ye Mighty, and despair!"
@@ -177,25 +178,30 @@ extract_from_bencode(torrent_t *t)
                     }
                 }
             }
+            be_dict_free(se);
 
         } else if (ral == 0) {  /* announce-list (optional) */
+            be_free(e->val);
             continue;
 
         } else if (rcd == 0) {  /* creation date (optional) */
+            be_free(e->val);
             continue;
 
         } else if (rc == 0) {   /* comment (optional */
+            be_free(e->val);
             continue;
 
         } else if (rcb == 0) {  /* created by (optional) */
+            be_free(e->val);
             continue;
 
         } else if (re == 0) {   /* encoding (optional) */
+            be_free(e->val);
             continue;
         }
     }
-
-    be_dict_free(e);            /* Free outer dictionary */
+    be_dict_free(e);
 
     return 0;
 }
