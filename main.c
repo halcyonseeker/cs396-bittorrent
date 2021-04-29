@@ -43,21 +43,145 @@ static int log_verbosely = 0;
  */
 typedef long long int be_num_t;
 
-typedef struct chunks {
-    int             num;
-    char           *checksum;
-    struct chunks *next;
-} chunks_t;
+typedef struct chunk {
+    be_num_t       num;
+    char         *checksum;
+    struct chunk *next;
+} chunk_t;
 
 typedef struct torrent {
     be_node_t *     data;
     be_num_t        piece_len;
     be_num_t        file_len;
-    chunks_t *      pieces;
+    chunk_t *       pieces;
     char *          filename;
     char *          announce;
     struct torrent *next;
 } torrent_t;
+
+/**
+ * "My name is extract_from_bencode, extractor of important data:
+ *  Look on my horrible spaghetti, ye Mighty, and despair!"
+ *         -- Percy Shelly, Ozymandias
+ *
+ * .torrent files can contain a lot of information, this functions takes
+ * a torrent_t struct which contains a pointer to the bencode structures
+ * and fields for important information. It then traverses the bencode
+ * structures and copies the important information into the argument's
+ * other fields.
+ *
+ * The relevant fields are described here:
+ * https://wiki.theory.org/BitTorrentSpecification#Metainfo_File_Structure
+ */
+int
+extract_from_bencode(torrent_t *t)
+{
+    list_t *top_position, *info_position;
+
+    if (t == NULL) return 1;
+
+    /*
+    * The bencode library uses intrusively linked lists which I'm traversing
+    * using macros defined in bencode/list.h. Apparently this is what they
+    * use in the Linux Kernel but it makes me *profoundly* uncomfortable.
+    */
+
+    list_for_each(top_position, &t->data->x.dict_head) {
+        be_dict_t *e = list_entry(top_position, be_dict_t, link);
+
+        int ra  = strncmp(e->key.buf, "announce", (size_t)e->key.len);
+        int ri  = strncmp(e->key.buf, "info", e->key.len);
+
+        if (ra == 0) {          /* announce */
+            t->announce = (char*)malloc(sizeof(char)*e->val->x.str.len);
+            if (t->announce == NULL) {
+               perror("malloc");
+                return 1;
+            }
+
+            if ((t->announce = strcpy(t->announce, e->val->x.str.buf)) == NULL) {
+                perror("strcpy");
+                return 1;
+            }
+
+        } else if (ri == 0) {   /* info */
+            list_for_each(info_position, &e->val->x.dict_head) {
+                be_dict_t *se = list_entry(info_position, be_dict_t, link);
+
+                int ril  = strncmp(se->key.buf, "length", (size_t)se->key.len);
+                int rin  = strncmp(se->key.buf, "name", (size_t)se->key.len);
+                int ripl = strncmp(se->key.buf, "piece length", (size_t)se->key.len);
+                int rip  = strncmp(se->key.buf, "pieces", (size_t)se->key.len);
+
+                if (ril == 0) {          /* length */
+                    t->file_len = se->val->x.num;
+
+                } else if (rin == 0) {   /* name */
+                    t->filename = (char*)malloc(sizeof(char) * se->val->x.str.len);
+                    if (t->filename == NULL) {
+                        perror("malloc");
+                        return 1;
+                    }
+
+                    t->filename = strcpy(t->filename, se->val->x.str.buf);
+                    if (t->filename == NULL) {
+                        perror("strcpy");
+                        return 1;
+                    }
+
+                } else if (ripl == 0) {  /* piece length */
+                    t->piece_len = se->val->x.num;
+
+                } else if (rip == 0) {   /* pieces */
+                    /* The value field in this dictionary is a concatenation of
+                     * 20-byte piece sha1 hashes. Note that this logic assumes a
+                     * single-file torrent */
+                    be_num_t pnum   = 0;
+                    be_num_t offset = 0;
+                    chunk_t *head   = NULL;
+                    chunk_t *curr   = NULL;
+                    char    *begin  = se->val->x.str.buf;
+
+                    while (offset < se->val->x.str.len) {
+                        curr = (chunk_t*)calloc(1, sizeof(chunk_t));
+                        if (curr == NULL) {
+                            perror("malloc");
+                            return 1;
+                        }
+
+                        curr->checksum = (char*)malloc(sizeof(char) * 21);
+                        if (curr->checksum == NULL) {
+                            perror("malloc");
+                            return 1;
+                        }
+
+                        curr->checksum = strncpy(curr->checksum, begin, 20);
+                        if (curr->checksum == NULL) {
+                            perror("strncpy");
+                            return 1;
+                        }
+
+                        curr->checksum[21] = '\0';
+                        curr->num = pnum;
+
+                        if (head == NULL) {
+                            head = curr;
+                        } else {
+                            curr->next = head;
+                            head       = curr;
+                        }
+
+                        pnum++;
+                        offset+=20;
+                    }
+
+                    t->pieces = head;
+                }
+            }
+        }
+    }
+    return 0;
+}
 
 /**
  * Start the process of downloading a torrent. Takes a pointer to a .torrent
@@ -68,6 +192,21 @@ void *
 thread_main(void *raw)
 {
     torrent_t *torrent = (torrent_t *)raw;
+
+    if (extract_from_bencode(torrent) != 0) {
+        FATAL("A failure occurred in extract_from_bencode()");
+        return NULL;
+    }
+
+    printf("piece_len = %lli\nfile_len  = %lli\nfilename  = %s\nannounce  = %s\n",
+           torrent->piece_len,
+           torrent->file_len,
+           torrent->filename,
+           torrent->announce);
+
+    printf("Checksums:\n");
+    for (chunk_t *c = torrent->pieces; c != NULL; c = c->next)
+        printf("\t%lli\t%s\n", c->num, c->checksum);
 
     return torrent;
 }
