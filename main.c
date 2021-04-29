@@ -77,6 +77,7 @@ int
 extract_from_bencode(torrent_t *t)
 {
     list_t *top_position, *info_position;
+    be_dict_t *e, *se;
 
     if (t == NULL) return 1;
 
@@ -87,26 +88,29 @@ extract_from_bencode(torrent_t *t)
     */
 
     list_for_each(top_position, &t->data->x.dict_head) {
-        be_dict_t *e = list_entry(top_position, be_dict_t, link);
+        e = list_entry(top_position, be_dict_t, link);
 
         int ra  = strncmp(e->key.buf, "announce", (size_t)e->key.len);
         int ri  = strncmp(e->key.buf, "info", e->key.len);
 
-        if (ra == 0) {          /* announce */
-            t->announce = (char*)malloc(sizeof(char)*e->val->x.str.len);
+        if (ra == 0) {         /* announce */
+            t->announce = (char*)calloc(e->val->x.str.len + 1, sizeof(char));
             if (t->announce == NULL) {
-               perror("malloc");
+               perror("calloc");
                 return 1;
             }
 
-            if ((t->announce = strcpy(t->announce, e->val->x.str.buf)) == NULL) {
-                perror("strcpy");
+            t->announce = strncpy(t->announce,
+                                  e->val->x.str.buf,
+                                  e->val->x.str.len);
+            if (t->announce == NULL) {
+                perror("strncpy");
                 return 1;
             }
 
         } else if (ri == 0) {   /* info */
             list_for_each(info_position, &e->val->x.dict_head) {
-                be_dict_t *se = list_entry(info_position, be_dict_t, link);
+                se = list_entry(info_position, be_dict_t, link);
 
                 int ril  = strncmp(se->key.buf, "length", (size_t)se->key.len);
                 int rin  = strncmp(se->key.buf, "name", (size_t)se->key.len);
@@ -117,15 +121,17 @@ extract_from_bencode(torrent_t *t)
                     t->file_len = se->val->x.num;
 
                 } else if (rin == 0) {   /* name */
-                    t->filename = (char*)malloc(sizeof(char) * se->val->x.str.len);
+                    t->filename = (char*)calloc(se->val->x.str.len + 1, sizeof(char));
                     if (t->filename == NULL) {
-                        perror("malloc");
+                        perror("calloc");
                         return 1;
                     }
 
-                    t->filename = strcpy(t->filename, se->val->x.str.buf);
+                    t->filename = strncpy(t->filename,
+                                          se->val->x.str.buf,
+                                          se->val->x.str.len);
                     if (t->filename == NULL) {
-                        perror("strcpy");
+                        perror("strncpy");
                         return 1;
                     }
 
@@ -145,13 +151,13 @@ extract_from_bencode(torrent_t *t)
                     while (offset < se->val->x.str.len) {
                         curr = (chunk_t*)calloc(1, sizeof(chunk_t));
                         if (curr == NULL) {
-                            perror("malloc");
+                            perror("calloc");
                             return 1;
                         }
 
-                        curr->checksum = (char*)malloc(sizeof(char) * 21);
+                        curr->checksum = (char*)calloc(22, sizeof(char));
                         if (curr->checksum == NULL) {
-                            perror("malloc");
+                            perror("calloc");
                             return 1;
                         }
 
@@ -174,12 +180,12 @@ extract_from_bencode(torrent_t *t)
                         pnum++;
                         offset+=20;
                     }
-
                     t->pieces = head;
                 }
             }
         }
     }
+
     return 0;
 }
 
@@ -204,9 +210,9 @@ thread_main(void *raw)
            torrent->filename,
            torrent->announce);
 
-    printf("Checksums:\n");
-    for (chunk_t *c = torrent->pieces; c != NULL; c = c->next)
-        printf("\t%lli\t%s\n", c->num, c->checksum);
+    /* printf("Checksums:\n"); */
+    /* for (chunk_t *c = torrent->pieces; c != NULL; c = c->next) */
+    /*     printf("\t%lli\t%s\n", c->num, c->checksum); */
 
     return torrent;
 }
