@@ -17,7 +17,7 @@
         fprintf(stderr, __VA_ARGS__);                                          \
     }
 
-int log_verbosely = 0;
+extern int log_verbosely;
 
 /**
  * Torrent files are passed on the command line, we'll store them in a

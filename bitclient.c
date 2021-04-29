@@ -17,6 +17,8 @@
 #include "bencode/list.h"
 #include "bencode/bencode.h"
 
+int log_verbosely = 0;
+
 #define USAGE                                                                  \
     "\
 Usage: bitclient [-vh] file1.torrent, ...\n\
