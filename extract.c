@@ -80,9 +80,9 @@ extract_info_pieces(be_dict_t *d, torrent_t *t)
             return errno;
         }
 
-        curr->checksum = strncpy(curr->checksum, begin, 20);
+        curr->checksum = extract_hex_digest(begin, 20);
         if (curr->checksum == NULL) {
-            perror("strncpy");
+            perror("extract_hex_digest");
             return errno;
         }
 
@@ -102,6 +102,23 @@ extract_info_pieces(be_dict_t *d, torrent_t *t)
     t->pieces = head;
 
     return 0;
+}
+
+/**
+ * Take a buffer of binary data and convert it to a hexadecimal string.
+ * This function is used both internally in extract.c to save the piece
+ * hashes in a printable form, and externally to compare sha1 hashes.
+ */
+char *
+extract_hex_digest(char *buf, int len)
+{
+    char *hexbuf  = (char*)calloc(len + 22, sizeof(char));
+    char *endptr  = buf + len;
+    long long hex = strtoll(buf, &endptr, 2);
+
+    sprintf(hexbuf, "%llx", hex);
+
+    return hexbuf;
 }
 
 /**

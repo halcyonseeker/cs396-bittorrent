@@ -47,9 +47,9 @@ thread_main(void *raw)
            torrent->filename,
            torrent->announce);
 
-    /* printf("Checksums:\n"); */
-    /* for (chunk_t *c = torrent->pieces; c != NULL; c = c->next) */
-    /*     printf("\t%lli\t%s\n", c->num, c->checksum); */
+
+    for (chunk_t *c = torrent->pieces; c != NULL; c = c->next)
+        printf("\t%lli\t0x%s\n", c->num, c->checksum);
 
     return torrent;
 }
