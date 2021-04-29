@@ -111,6 +111,7 @@ open_torrent(char *filename)
         return NULL;
     }
 
+    free(buf);
     fclose(fp);
     return t;
 }
