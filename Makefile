@@ -7,8 +7,11 @@ GFLAGS = -fprofile-arcs -ftest-coverage
 
 all: clean $(TARGET)
 
-bitclient:
+bitclient: extract
 	$(CC) $(CFLAGS) $(GFLAGS) -o $(TARGET) bitclient.c bencode/bencode.o
+
+extract:
+	$(CC) $(CFLAGS) $(GFLAGS) -o extract.o -c extract.c
 
 clean:
 	rm -f bitclient *.o *.gcda *.gcno
