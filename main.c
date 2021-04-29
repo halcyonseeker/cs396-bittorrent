@@ -59,6 +59,99 @@ typedef struct torrent {
     struct torrent *next;
 } torrent_t;
 
+static int
+extract_announce(be_dict_t *d, torrent_t *t)
+{
+    if (d == NULL || t == NULL) return 1;
+
+    t->announce = (char*)calloc(d->val->x.str.len + 1, sizeof(char));
+    if (t->announce == NULL) {
+        perror("calloc");
+        return errno;
+    }
+
+    t->announce = strncpy(t->announce, d->val->x.str.buf, d->val->x.str.len);
+    if (t->announce == NULL) {
+        perror("strncpy");
+        return errno;
+    }
+
+    return 0;
+}
+
+static int
+extract_info_name(be_dict_t *d, torrent_t *t)
+{
+    if (d == NULL || t == NULL) return 1;
+
+    t->filename = (char*)calloc(d->val->x.str.len + 1, sizeof(char));
+    if (t->filename == NULL) {
+        perror("calloc");
+        return errno;
+    }
+
+    t->filename = strncpy(t->filename, d->val->x.str.buf, d->val->x.str.len);
+    if (t->filename == NULL) {
+        perror("strncpy");
+        return errno;
+    }
+
+    return 0;
+}
+
+/**
+ * The value field in this dictionary is a concatenation of 20-byte piece
+ * sha1 hashes. Note that this logic assumes a single-file torrent.
+ */
+static int
+extract_info_pieces(be_dict_t *d, torrent_t *t)
+{
+    if (d == NULL || t == NULL) return 1;
+
+    be_num_t pnum   = 0;
+    be_num_t offset = 0;
+    chunk_t *head   = NULL;
+    chunk_t *curr   = NULL;
+    char    *begin  = d->val->x.str.buf;
+
+    while (offset < d->val->x.str.len) {
+        curr = (chunk_t*)calloc(1, sizeof(chunk_t));
+        if (curr == NULL) {
+            perror("calloc");
+            return errno;
+        }
+
+        curr->checksum = (char*)calloc(22, sizeof(char));
+        if (curr->checksum == NULL) {
+            perror("calloc");
+            return errno;
+        }
+
+        curr->checksum = strncpy(curr->checksum, begin, 20);
+        if (curr->checksum == NULL) {
+            perror("strncpy");
+            return errno;
+        }
+
+        curr->checksum[21] = '\0';
+        curr->num = pnum;
+
+        if (head == NULL) {
+            head = curr;
+        } else {
+            curr->next = head;
+            head       = curr;
+        }
+
+        pnum++;
+        offset+=20;
+    }
+    t->pieces = head;
+
+    return 0;
+}
+
+
 /**
  * "My name is extract_from_bencode, extractor of important data:
  *  Look on my horrible spaghetti, ye Mighty, and despair!"
@@ -92,19 +185,16 @@ extract_from_bencode(torrent_t *t)
 
         int ra  = strncmp(e->key.buf, "announce", (size_t)e->key.len);
         int ri  = strncmp(e->key.buf, "info", e->key.len);
+        /* Optional */
+        int ral = strncmp(e->key.buf, "announce-list", (size_t)e->key.len);
+        int rcd = strncmp(e->key.buf, "creation date", (size_t)e->key.len);
+        int rc  = strncmp(e->key.buf, "comment", (size_t)e->key.len);
+        int rcb = strncmp(e->key.buf, "created by", (size_t)e->key.len);
+        int re  = strncmp(e->key.buf, "encoding", (size_t)e->key.len);
 
         if (ra == 0) {         /* announce */
-            t->announce = (char*)calloc(e->val->x.str.len + 1, sizeof(char));
-            if (t->announce == NULL) {
-               perror("calloc");
-                return 1;
-            }
-
-            t->announce = strncpy(t->announce,
-                                  e->val->x.str.buf,
-                                  e->val->x.str.len);
-            if (t->announce == NULL) {
-                perror("strncpy");
+            if (extract_announce(e, t) != 0) {
+                perror("extract_announce");
                 return 1;
             }
 
@@ -121,17 +211,8 @@ extract_from_bencode(torrent_t *t)
                     t->file_len = se->val->x.num;
 
                 } else if (rin == 0) {   /* name */
-                    t->filename = (char*)calloc(se->val->x.str.len + 1, sizeof(char));
-                    if (t->filename == NULL) {
-                        perror("calloc");
-                        return 1;
-                    }
-
-                    t->filename = strncpy(t->filename,
-                                          se->val->x.str.buf,
-                                          se->val->x.str.len);
-                    if (t->filename == NULL) {
-                        perror("strncpy");
+                    if (extract_info_name(se, t) != 0) {
+                        perror("extract_info_name");
                         return 1;
                     }
 
@@ -139,52 +220,31 @@ extract_from_bencode(torrent_t *t)
                     t->piece_len = se->val->x.num;
 
                 } else if (rip == 0) {   /* pieces */
-                    /* The value field in this dictionary is a concatenation of
-                     * 20-byte piece sha1 hashes. Note that this logic assumes a
-                     * single-file torrent */
-                    be_num_t pnum   = 0;
-                    be_num_t offset = 0;
-                    chunk_t *head   = NULL;
-                    chunk_t *curr   = NULL;
-                    char    *begin  = se->val->x.str.buf;
-
-                    while (offset < se->val->x.str.len) {
-                        curr = (chunk_t*)calloc(1, sizeof(chunk_t));
-                        if (curr == NULL) {
-                            perror("calloc");
-                            return 1;
-                        }
-
-                        curr->checksum = (char*)calloc(22, sizeof(char));
-                        if (curr->checksum == NULL) {
-                            perror("calloc");
-                            return 1;
-                        }
-
-                        curr->checksum = strncpy(curr->checksum, begin, 20);
-                        if (curr->checksum == NULL) {
-                            perror("strncpy");
-                            return 1;
-                        }
-
-                        curr->checksum[21] = '\0';
-                        curr->num = pnum;
-
-                        if (head == NULL) {
-                            head = curr;
-                        } else {
-                            curr->next = head;
-                            head       = curr;
-                        }
-
-                        pnum++;
-                        offset+=20;
+                    if (extract_info_pieces(se, t) != 0) {
+                        perror("extract_info_pieces");
+                        return 1;
                     }
-                    t->pieces = head;
                 }
             }
+
+        } else if (ral == 0) {  /* announce-list (optional) */
+            continue;
+
+        } else if (rcd == 0) {  /* creation date (optional) */
+            continue;
+
+        } else if (rc == 0) {   /* comment (optional */
+            continue;
+
+        } else if (rcb == 0) {  /* created by (optional) */
+            continue;
+
+        } else if (re == 0) {   /* encoding (optional) */
+            continue;
         }
     }
+
+    be_dict_free(e);            /* Free outer dictionary */
 
     return 0;
 }
