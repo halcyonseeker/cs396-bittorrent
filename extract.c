@@ -76,46 +76,46 @@ extract_info_pieces(be_dict_t *d, torrent_t *t)
 {
     if (d == NULL || t == NULL) return 1;
 
-    be_num_t pnum   = 0;
-    be_num_t offset = 0;
-    chunk_t *head   = NULL;
-    chunk_t *curr   = NULL;
-    char    *begin  = d->val->x.str.buf;
+    be_num_t piece   = 0;
+    char    *baseptr = d->val->x.str.buf;
+    char    *tmpbuf  = NULL;
+    chunk_t *node    = NULL;
+    chunk_t *prev    = NULL;
 
-    while (offset < d->val->x.str.len) {
-        curr = (chunk_t*)calloc(1, sizeof(chunk_t));
-        if (curr == NULL) {
+    /* Loop through the string by 20-byte intervals */
+    while ((baseptr - d->val->x.str.buf) < d->val->x.str.len) {
+        /* Copy a 20-byte SHA1 checksum into a temporary buffer */
+        if ((tmpbuf = (char*)calloc(22, sizeof(char))) == NULL) {
             perror("calloc");
-            return errno;
+            return 1;
         }
+        if ((tmpbuf = (char*)memcpy(tmpbuf, baseptr, 20)) == NULL) {
+            perror("memcpy");
+            return 1;
+        }
+        tmpbuf[21] = '\0';
 
-        curr->checksum = (char*)calloc(22, sizeof(char));
-        if (curr->checksum == NULL) {
+        /* Allocate a node for the current chunk in the linked list */
+        if ((node = (chunk_t*)calloc(1, sizeof(chunk_t))) == NULL) {
             perror("calloc");
-            return errno;
+            return 1;
         }
 
-        curr->checksum = extract_hex_digest(begin, 20);
-        if (curr->checksum == NULL) {
-            perror("extract_hex_digest");
-            return errno;
-        }
+        node->num = piece;
+        node->checksum = tmpbuf;
 
-        curr->checksum[21] = '\0';
-        curr->num = pnum;
-
-        if (head == NULL) {
-            head = curr;
+        /* Append the current node to the linked list of pieces */
+        if (prev == NULL) {
+            t->pieces = node;
+            prev = node;
         } else {
-            curr->next = head;
-            head       = curr;
-        }
+            prev->next = node;
+            prev = node;
+        }        
 
-        pnum++;
-        offset+=20;
+        piece++;
+        baseptr+=20;
     }
-    t->pieces = head;
-
     return 0;
 }
 
@@ -124,17 +124,10 @@ extract_info_pieces(be_dict_t *d, torrent_t *t)
  * This function is used both internally in extract.c to save the piece
  * hashes in a printable form, and externally to compare sha1 hashes.
  */
-char *
-extract_hex_digest(char *buf, int len)
-{
-    char *hexbuf  = (char*)calloc(len + 22, sizeof(char));
-    char *endptr  = buf + len;
-    long long hex = strtoll(buf, &endptr, 2);
-
-    sprintf(hexbuf, "%llx", hex);
-
-    return hexbuf;
-}
+/* char * */
+/* extract_hex_digest(char *buf, int len) */
+/* { */
+/* } */
 
 /**
  * "My name is extract_from_bencode, extractor of important data:
