@@ -13,6 +13,7 @@
 
 #include "bitclient.h"
 #include "extract.h"
+#include "tracker.h"
 
 #include "bencode/list.h"
 #include "bencode/bencode.h"
@@ -50,6 +51,12 @@ thread_main(void *raw)
 
     for (chunk_t *c = torrent->pieces; c != NULL; c = c->next)
         printf("\t%lli\t0x%s\n", c->num, c->checksum);
+
+    /* For now this will just print out the message returned by the tracker */
+    if (tracker_request_peers(torrent)) {
+        FATAL("Unable to request peer list from tracker");
+        return NULL;
+    }
 
     return torrent;
 }
