@@ -116,15 +116,6 @@ open_torrent(char *filename)
     return t;
 }
 
-/*
- * https://en.wikipedia.org/wiki/BitTorrent
- * https://wiki.theory.org/BitTorrentSpecification
- * http://www.bittorrent.org/beps/bep_0003.html
- * https://www.morehawes.co.uk/the-bittorrent-protocol
- * https://www.beautifulcode.co/blog/58-understanding-bittorrent-protocol
- * http://dandylife.net/docs/BitTorrent-Protocol.pdf
- * https://skerritt.blog/bit-torrent/
- */
 int
 main(int argc, char *argv[])
 {
