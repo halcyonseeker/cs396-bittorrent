@@ -222,15 +222,21 @@ tracker_request_peers(torrent_t *t)
         perror("calloc");
         return 1;
     }
-    
-    /* Set up and send the request */
-    if ((curl = curl_easy_init()) != NULL) {
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc_callback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)body);
-        if ((err = curl_easy_perform(curl)) != CURLE_OK) {
-            FATAL("CURL failed to reach tracker API: %s\n",
-                  curl_easy_strerror(err));
+
+    if (*t->announce == 'h') { /* HTTP or HTTPS */
+        /* Set up and send the request */
+        if ((curl = curl_easy_init()) != NULL) {
+            curl_easy_setopt(curl, CURLOPT_URL, url);
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc_callback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)body);
+            if ((err = curl_easy_perform(curl)) != CURLE_OK) {
+                FATAL("CURL failed to reach tracker API: %s\n",
+                      curl_easy_strerror(err));
+            }
+            curl_easy_cleanup(curl);
+        } else {
+            perror("curl_easy_init");
+            return 1;
         }
         curl_easy_cleanup(curl);
     } else {
