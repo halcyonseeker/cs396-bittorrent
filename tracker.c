@@ -59,7 +59,17 @@ gen_api_url(torrent_t *t)
         return NULL;
     }
 
-    DEBUG("URL: %s\n", urlbuf);
+    DEBUG("API FIELDS\n\
+\tinfo_hash  = (%s)\n\
+\tpeer_id    = (%s)\n\
+\tport       = (%s)\n\
+\tuploaded   = (%lli) bytes\n\
+\tdownloaded = (%lli) bytes\n\
+\tleft       = (%lli) bytes\n\
+\tcompact    = (%lli)\n\
+\tevent      = (%s)\n\
+\tfull URL   = (%s)\n", t->info_hash, t->peer_id, t->port, t->uploaded, t->dloaded,
+          t->left, t->compact, t->event, urlbuf);
 
     return urlbuf;
 }
