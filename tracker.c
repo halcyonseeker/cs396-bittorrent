@@ -25,12 +25,22 @@ curl_writefunc_callback(void *data, size_t size, size_t nmemb, void *userp)
     return size * nmemb;
 }
 
+/**
+ *
+ */
 static char *
 gen_api_url(torrent_t *t)
 {
     char *urlbuf = NULL;
 
     if (t == NULL) return NULL;
+
+    /* 
+     * torrents/haiku.torrent:     times out (announcer downtime?)
+     * torrents/archlinux.torrent: segfault in strcpy() (no announcer field??)
+     * torrents/9front.torrent:    invalid request (HTML body????)
+     * torrents/(debian|minix3|slackware).torrent: Not found (bad t->info_hash?)
+     */
 
     /* 1KB should be MORE than enough */
     if ((urlbuf = (char*)calloc(1024, sizeof(char))) == NULL) {
@@ -152,7 +162,7 @@ tracker_parse_response(char *buf)
                     }
                     node->id = strncpy(node->id, e->val->x.str.buf, e->val->x.str.len);
                     if (node->id == NULL) {
-                        perror("calloc");
+                        perror("strncpy");
                         return NULL;
                     }
 
@@ -176,7 +186,7 @@ tracker_parse_response(char *buf)
                     }
                     node->port = strncpy(node->port, e->val->x.str.buf, e->val->x.str.len);
                     if (node->port == NULL) {
-                        perror("calloc");
+                        perror("strncpy");
                         return NULL;
                     }
                 }
@@ -265,6 +275,7 @@ tracker_request_peers(torrent_t *t)
     }
 
     free(body);
+    free(url);
 
     return 0;
 }

@@ -168,20 +168,25 @@ extract_info_hash(be_dict_t *infoval, torrent_t *t)
         return 1;
     }
 
+    DEBUG("Bencoded info dict: (%s)\n", buf); /* MISSING PIECES KEY */
+
     /* Now make the aforementioned big fucking number smaller for SHA1 */
     len = strlen(buf);
 
     /* Allocate a buffer for the checksum */
-    if ((sha = (unsigned char*)malloc(20)) == NULL) {
+    if ((sha = (unsigned char*)malloc(21)) == NULL) {
         perror("malloc");
         return 1;
     }
+    sha[20] = '\0';
 
     /* Compute the checksum */
     if ((sha = SHA1((unsigned char*)buf, len, sha)) == NULL) {
         perror("SHA1");
         return 1;
     }
+
+    DEBUG("SHA1 hash of info dict: (%s)\n", sha);
 
     /* Allocate a buffer to store the URLencoded checksum in */
     if ((url = (char*)calloc(100, sizeof(char))) == NULL) {
@@ -207,9 +212,12 @@ extract_info_hash(be_dict_t *infoval, torrent_t *t)
         return 1;
     }
 
+    DEBUG("URLendoced sha1 hash: (%s)\n", url);
+
     t->info_hash = (char*)url;
     infoval = save;
 
+    free(sha);
     free(buf);
     return 0;
 }

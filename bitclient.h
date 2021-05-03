@@ -64,6 +64,6 @@ typedef struct torrent {
     be_num_t        left;      /* The number of bytes we still need */
     be_num_t        compact;   /* No */
     /* Information from the announce tracker */
-    tracker_t       trackers;  /* Some nice folks we should talk with */
+    tracker_t *     trackers;  /* Some nice folks we should talk with */
     struct torrent *next;      /* We shouldn't support multiple torrents */
 } torrent_t;

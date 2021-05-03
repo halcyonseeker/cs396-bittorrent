@@ -191,15 +191,33 @@ main(int argc, char *argv[])
         }
     }
 
+    DEBUG("Exiting cleanly...\n");
+
     /* Free the torrents */
     torrent_t *t_save;
-    chunk_t   *c_save;
+    chunk_t *  c_save;
+    peers_t *  p_save;
     for (torrent_t *t = torrent_head; t != NULL; t = t_save) {
-        if (t->filename != NULL) free(t->filename);
-        if (t->announce != NULL) free(t->announce);
+        /* t->data should have been saved earlier */
+        free(t->filename);
+        free(t->announce);
+        free(t->info_hash);
+        if (t->trackers != NULL) {
+            free(t->trackers->id);
+            if (t->trackers->peers != NULL) {
+                for (peers_t *p = t->trackers->peers; p != NULL; p = p_save) {
+                    free(p->id);
+                    free(p->ip);
+                    free(p->port);
+                    p_save = p->next;
+                    free(p);
+                }
+            }
+            free(t->trackers);
+        }
         if (t->pieces != NULL) {
             for (chunk_t *c = t->pieces; c != NULL; c = c_save) {
-                if (c->checksum != NULL) free(c->checksum);
+                free(c->checksum);
                 c_save = c->next;
                 free(c);
             }
