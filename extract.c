@@ -55,13 +55,13 @@ extract_info_name(be_dict_t *d, torrent_t *t)
     t->filename = (char*)calloc(d->val->x.str.len + 1, sizeof(char));
     if (t->filename == NULL) {
         perror("calloc");
-        return errno;
+        return 1;
     }
 
     t->filename = strncpy(t->filename, d->val->x.str.buf, d->val->x.str.len);
     if (t->filename == NULL) {
         perror("strncpy");
-        return errno;
+        return 1;
     }
 
     return 0;
@@ -137,17 +137,30 @@ extract_info_hash(be_dict_t *infoval, torrent_t *t)
     char *buf = NULL;
     char *url = NULL;
     unsigned char *sha = NULL;
+    be_node_t *node = NULL;
+    be_dict_t *save = infoval;
 
     DEBUG("Attempting to extract info hash...\n");
 
+    if (infoval == NULL || t == NULL) {
+        errno = EINVAL;
+        return 1;
+    }
+
     /* We need to stick infoval inside a be_node_t in order to encode it */
-    be_node_t *node = NULL;
+    /* THIS ALLOCATION IS THE PROBLEM */
+    /* We're reading 8 bytes after this block in extract_from_bencode() */
     if ((node = (be_node_t*)calloc(1, sizeof(be_node_t))) == NULL) {
         perror("calloc");
         return 1;
     }
+    //DEBUG("Address of node is (%li)\n", (size_t)(node + 40));
     node->type = DICT;
-    node->x.dict_head = infoval->link; /* Is be_encode struggling with this? */
+    init_list_head(&node->link);
+    init_list_head(&node->x.dict_head);
+    list_add_tail(&infoval->link, &node->x.dict_head);
+    /* node->type = DICT; */
+    /* node->x.dict_head = infoval->link; */
     /* vvv these fuckers didn't work but I'll keep em around anywhay vvv */
     /* init_list_head(&infoval->link); */
     /* list_add_tail(&infoval->link, &node->x.dict_head); */
@@ -195,18 +208,20 @@ extract_info_hash(be_dict_t *infoval, torrent_t *t)
             perror("curl_easy_escape");
             return 1;
         }
+        curl_easy_cleanup(curl);
     } else {
         perror("curl_easy_init");
         return 1;
     }
 
     /* Resize the buffer of URLencoded data */
-    if ((url = (char*)realloc(url, strlen(url))) == NULL) {
+    if ((url = (char*)realloc(url, strlen(url)+1)) == NULL) {
         perror("realloc");
         return 1;
     }
 
     t->info_hash = (char*)url;
+    infoval = save;
 
     free(buf);
     return 0;
@@ -229,7 +244,7 @@ extract_info_hash(be_dict_t *infoval, torrent_t *t)
 int
 extract_from_bencode(torrent_t *t)
 {
-    list_t *top_position, *info_position;
+    list_t *top_position, *info_position, *top_tmp, *info_tmp;
     be_dict_t *e, *se;
 
     if (t == NULL) return 1;
@@ -255,70 +270,67 @@ extract_from_bencode(torrent_t *t)
      * use in the Linux Kernel but it makes me *profoundly* uncomfortable.
      */
 
-    DEBUG("Entering main metainfo dictionary\n");
-
-    list_for_each(top_position, &t->data->x.dict_head) {
+    DEBUG("BEGIN main dict loop\n");
+    list_for_each_safe(top_position, top_tmp, &t->data->x.dict_head) {
         e = list_entry(top_position, be_dict_t, link);
+        DEBUG("--- BEGIN ITERATION of main dict loop, e=(%li), key=(%s)\n",
+              (size_t)e, e->key.buf);
 
-        if (!strncmp(e->key.buf, "announce", (size_t)e->key.len)) {
+        if (!strncmp(e->key.buf, "announce\0", (size_t)e->key.len+1)) {
             if (extract_announce(e, t) != 0) {
                 perror("extract_announce");
                 return 1;
             }
-
         } else if (!strncmp(e->key.buf, "info", e->key.len)) {
-            DEBUG("Entering info metainfo dictionary\n");
-            list_for_each(info_position, &e->val->x.dict_head) {
+
+            /* Get a hash of the whole info dictionary */
+            printf("Address of e is (%li)\n", (size_t)e);
+            if (extract_info_hash(e, t) != 0) {
+                perror("extract_info_hash");
+                return 1;
+            }
+            printf("Address of e is (%li)\n", (size_t)e);
+
+            DEBUG("--- BEGIN info dict loop\n");
+            list_for_each_safe(info_position, info_tmp, &e->val->x.dict_head) {
                 se = list_entry(info_position, be_dict_t, link);
+                DEBUG("--- --- BEGIN ITERATION of info dict loop, se=(%li), key=(%s)\n",
+                      (size_t)se, se->key.buf);
 
                 if (!strncmp(se->key.buf, "length", (size_t)se->key.len)) {
                     t->file_len = se->val->x.num;
-
                 } else if (!strncmp(se->key.buf, "name", (size_t)se->key.len)) {
                     if (extract_info_name(se, t) != 0) {
                         perror("extract_info_name");
                         return 1;
                     }
-
                 } else if (!strncmp(se->key.buf, "piece length", (size_t)se->key.len)) {
                     t->piece_len = se->val->x.num;
-
                 } else if (!strncmp(se->key.buf, "pieces", (size_t)se->key.len)) {
                     if (extract_info_pieces(se, t) != 0) {
                         perror("extract_info_pieces");
                         return 1;
                     }
-                    DEBUG("Successfully extracted piece checksums\n");
-                    if (extract_info_hash(se, t) != 0) {
-                        perror("extract_info_hash");
-                        return 1;
-                    }
-                    DEBUG("Successfully extracted info hash\n");
                 }
+                DEBUG("--- --- END ITERATION of info dict loop\n");
             }
+            DEBUG("--- END info dict loop\n")
             be_dict_free(se);
 
         } else if (!strncmp(e->key.buf, "announce-list", (size_t)e->key.len)) {
             be_free(e->val);
-            continue;
-
         } else if (!strncmp(e->key.buf, "creation date", (size_t)e->key.len)) {
             be_free(e->val);
-            continue;
-
         } else if (!strncmp(e->key.buf, "comment", (size_t)e->key.len)) {
             be_free(e->val);
-            continue;
-
         } else if (!strncmp(e->key.buf, "created by", (size_t)e->key.len)) {
             be_free(e->val);
-            continue;
-
         } else if (!strncmp(e->key.buf, "encoding", (size_t)e->key.len)) {
             be_free(e->val);
-            continue;
         }
+        DEBUG("--- END ITERATION of main dict loop\n");
     }
+    DEBUG("END main dict loop\n");
     be_dict_free(e);
 
     return 0;

@@ -27,6 +27,7 @@ Usage: bitclient [-vh] file1.torrent, ...\n\
         -v || --verbose        Log debugging information\n\
         -h || --help           Print this message and exit\n"
 
+
 /**
  * Start the process of downloading a torrent. Takes a pointer to a .torrent
  * file. Returns a pointer to the torrent file if everything went okay and
@@ -42,19 +43,24 @@ thread_main(void *raw)
         return NULL;
     }
 
-    printf("piece_len = %lli\nfile_len  = %lli\nfilename  = %s\nannounce  = %s\n",
-           torrent->piece_len,
-           torrent->file_len,
-           torrent->filename,
-           torrent->announce);
+    /* Set a "unique" 20-character ID */
+    torrent->peer_id = "12345678912345678900";
 
+    /* Set a port, we'll get a socket later */
+    torrent->port = "6881";
 
-    for (chunk_t *c = torrent->pieces; c != NULL; c = c->next)
-        printf("\t%lli\t0x%s\n", c->num, c->checksum);
+    /* printf("piece_len = %lli\nfile_len  = %lli\nfilename  = %s\nannounce  = %s\n", */
+    /*        torrent->piece_len, */
+    /*        torrent->file_len, */
+    /*        torrent->filename, */
+    /*        torrent->announce); */
+
+    /* for (chunk_t *c = torrent->pieces; c != NULL; c = c->next) */
+    /*     printf("\t%lli\t0x%s\n", c->num, c->checksum); */
 
     /* For now this will just print out the message returned by the tracker */
     if (tracker_request_peers(torrent)) {
-        FATAL("Unable to request peer list from tracker");
+        FATAL("Unable to request peer list from tracker.\n");
         return NULL;
     }
 

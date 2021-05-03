@@ -2,6 +2,7 @@
  * tracker.c -- Request information from and update trackers
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,15 +21,8 @@
 static size_t
 curl_writefunc_callback(void *data, size_t size, size_t nmemb, void *userp)
 {
-    size_t len = nmemb * size;
-    char *buf = (char*)userp;
-    memcpy(userp, data, nmemb * size);
-    if ((userp = (char*)realloc(userp, len + 1)) == NULL) {
-        perror("realloc");
-        return 1;
-    }
-    buf[len + 1] = '\0';
-    return 0;
+    memcpy(userp, data, size * nmemb);
+    return size * nmemb;
 }
 
 static char *
@@ -60,12 +54,12 @@ gen_api_url(torrent_t *t)
             t->announce, t->info_hash, t->peer_id, t->port, t->uploaded,
             t->dloaded, t->left, t->compact, t->event);
 
-    if ((urlbuf = (char*)realloc(urlbuf, strlen(urlbuf))) == NULL) {
+    if ((urlbuf = (char*)realloc(urlbuf, strlen(urlbuf)+1)) == NULL) {
         perror("realloc");
         return NULL;
     }
 
-    printf("URL: %s\n", urlbuf);
+    DEBUG("URL: %s\n", urlbuf);
 
     return urlbuf;
 }
@@ -104,7 +98,7 @@ tracker_parse_response(char *buf)
 
         if (!strncmp(e->key.buf, "failure reason", (size_t)e->key.len)) {
             FATAL("Tracker responded with failure message: %s\n", e->val->x.str.buf);
-            return NULL;
+            return track;
 
         } else if (!strncmp(e->key.buf, "interval", (size_t)e->key.len)) {
             track->interval = e->val->x.num;
@@ -209,7 +203,6 @@ tracker_parse_response(char *buf)
 int
 tracker_request_peers(torrent_t *t)
 {
-    CURLcode   err;
     CURL *     curl    = NULL;
     char *     body    = NULL;
     char *     url     = NULL;
@@ -235,7 +228,8 @@ tracker_request_peers(torrent_t *t)
             curl_easy_setopt(curl, CURLOPT_URL, url);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc_callback);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)body);
-            if ((err = curl_easy_perform(curl)) != CURLE_OK) {
+            CURLcode err = curl_easy_perform(curl);
+                if (err) {
                 FATAL("CURL failed to reach tracker API: %s\n",
                       curl_easy_strerror(err));
             }
@@ -247,15 +241,18 @@ tracker_request_peers(torrent_t *t)
     } else {                    /* TODO support udp:// trackers */
         FATAL("Tracker URL (%s) uses an unsupported protocol scheme :(\n",
               t->announce);
+        free(body);
         return 1;
     }
+
+    DEBUG("BODY: %s\n", body);
 
     /* Convert the API's response into something we can use */
     if ((tracker = tracker_parse_response(body)) == NULL) {
         FATAL("Tracker's response is mangled or unsupported\n");
+        free(body);
         return 1;
     }
-
 
     free(body);
 
