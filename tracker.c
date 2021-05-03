@@ -31,9 +31,41 @@ curl_writefunc_callback(void *data, size_t size, size_t nmemb, void *userp)
 static char *
 gen_api_url(torrent_t *t)
 {
-    /* We'll just return a test url for now */
+    char *urlbuf = NULL;
+
     if (t == NULL) return NULL;
-    return "http://ulthar.xyz:80";
+
+    /* 1KB should be MORE than enough */
+    if ((urlbuf = (char*)calloc(1024, sizeof(char))) == NULL) {
+        perror("calloc");
+        return NULL;
+    }
+    if ((urlbuf = strcpy(urlbuf, t->announce)) == NULL) {
+        perror("strcpy");
+        return NULL;
+    }
+
+    /* Progress related things like dloaded, left, uploaded, and event should 
+     * be filled in as we do those things. */
+
+    if (t->event == NULL)       /* We'll need to change this later */
+        t->event = "started";
+    t->compact = 0;             /* No we don't support compact responses */
+
+    sprintf(urlbuf,
+            "%s?info_hash=%s&peer_id=%s&port=%s&uploaded=%lli&downloaded=%lli&left=%lli&compact=%lli&event=%s",
+            t->announce, t->info_hash, t->peer_id, t->port, t->uploaded,
+            t->dloaded, t->left, t->compact, t->event);
+
+    if ((urlbuf = (char*)realloc(urlbuf, strlen(urlbuf))) == NULL) {
+        perror("realloc");
+        return NULL;
+    }
+
+    printf("URL: %s\n", urlbuf);
+
+    return urlbuf;
+}
 /**
  * Take the bencoded dictionary returned by a tracker (passed in BUF) and
  * extract important information from it, returning it in a tracker_t struct.
