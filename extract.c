@@ -6,9 +6,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <openssl/sha.h>        /* inb4 libressl nerds */
+#include <curl/curl.h>          /* For URLencoding */
 
-#include "extract.h"
 #include "bitclient.h"
+#include "extract.h"
+
+/******************** H E R E   B E   D R A G O N S ********************/
 
 /**
  * Helper function to extract the announce URL from the torrent data.
@@ -120,14 +124,93 @@ extract_info_pieces(be_dict_t *d, torrent_t *t)
 }
 
 /**
- * Take a buffer of binary data and convert it to a hexadecimal string.
- * This function is used both internally in extract.c to save the piece
- * hashes in a printable form, and externally to compare sha1 hashes.
+ * Return a URLencoded SHA1 hash of the bencoded info dictionary.
+ * This requires bencoding the entire sub-dictionary under the "info" key
+ * (passed as infoval) then computing the SHA1 hash of the resulting
+ * buffer. We then URLencode this hash and store it in t->info_hash.
+ * Return 0 iff all goes well.
  */
-/* char * */
-/* extract_hex_digest(char *buf, int len) */
-/* { */
-/* } */
+static int
+extract_info_hash(be_dict_t *infoval, torrent_t *t)
+{
+    CURL *curl;
+    char *buf = NULL;
+    char *url = NULL;
+    unsigned char *sha = NULL;
+
+    DEBUG("Attempting to extract info hash...\n");
+
+    /* We need to stick infoval inside a be_node_t in order to encode it */
+    be_node_t *node = NULL;
+    if ((node = (be_node_t*)calloc(1, sizeof(be_node_t))) == NULL) {
+        perror("calloc");
+        return 1;
+    }
+    node->type = DICT;
+    node->x.dict_head = infoval->link; /* Is be_encode struggling with this? */
+    /* vvv these fuckers didn't work but I'll keep em around anywhay vvv */
+    /* init_list_head(&infoval->link); */
+    /* list_add_tail(&infoval->link, &node->x.dict_head); */
+
+    /* Get the size of the required buffer */
+    /* be_num_t len = be_encode(node, NULL, 0); */
+    be_num_t len = 10000;    /* ^ won't work b/c bug, so big fucking number */
+
+    /* Allocate a buffer in which to store the encoded data */
+    if ((buf = (char*)calloc(len, sizeof(char))) == NULL) {
+        perror("calloc");
+        return 1;
+    }
+
+    /* Bencode the dictionary, saving the result in buf */
+    if (be_encode(node, buf, len) == 0) {
+        perror("be_encode");
+        return 1;
+    }
+
+    /* Now make the aforementioned big fucking number smaller for SHA1 */
+    len = strlen(buf);
+
+    /* Allocate a buffer for the checksum */
+    if ((sha = (unsigned char*)malloc(20)) == NULL) {
+        perror("malloc");
+        return 1;
+    }
+
+    /* Compute the checksum */
+    if ((sha = SHA1((unsigned char*)buf, len, sha)) == NULL) {
+        perror("SHA1");
+        return 1;
+    }
+
+    /* Allocate a buffer to store the URLencoded checksum in */
+    if ((url = (char*)calloc(100, sizeof(char))) == NULL) {
+        perror("calloc");
+        return 1;
+    }
+
+    /* URLencode the checksum */
+    if ((curl = curl_easy_init()) != NULL) {
+        if ((url = curl_easy_escape(curl, (char*)sha, 20)) == NULL) {
+            perror("curl_easy_escape");
+            return 1;
+        }
+    } else {
+        perror("curl_easy_init");
+        return 1;
+    }
+
+    /* Resize the buffer of URLencoded data */
+    if ((url = (char*)realloc(url, strlen(url))) == NULL) {
+        perror("realloc");
+        return 1;
+    }
+
+    t->info_hash = (char*)url;
+
+    free(buf);
+    return 0;
+}
 
 /**
  * "My name is extract_from_bencode, extractor of important data:
@@ -172,6 +255,8 @@ extract_from_bencode(torrent_t *t)
      * use in the Linux Kernel but it makes me *profoundly* uncomfortable.
      */
 
+    DEBUG("Entering main metainfo dictionary\n");
+
     list_for_each(top_position, &t->data->x.dict_head) {
         e = list_entry(top_position, be_dict_t, link);
 
@@ -182,6 +267,7 @@ extract_from_bencode(torrent_t *t)
             }
 
         } else if (!strncmp(e->key.buf, "info", e->key.len)) {
+            DEBUG("Entering info metainfo dictionary\n");
             list_for_each(info_position, &e->val->x.dict_head) {
                 se = list_entry(info_position, be_dict_t, link);
 
@@ -202,6 +288,12 @@ extract_from_bencode(torrent_t *t)
                         perror("extract_info_pieces");
                         return 1;
                     }
+                    DEBUG("Successfully extracted piece checksums\n");
+                    if (extract_info_hash(se, t) != 0) {
+                        perror("extract_info_hash");
+                        return 1;
+                    }
+                    DEBUG("Successfully extracted info hash\n");
                 }
             }
             be_dict_free(se);
