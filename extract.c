@@ -12,8 +12,6 @@
 #include "bitclient.h"
 #include "extract.h"
 
-/******************** H E R E   B E   D R A G O N S ********************/
-
 /**
  * Helper function to extract the announce URL from the torrent data.
  * It takes a pointer to a the "announce" entry of the main dictionary,
@@ -140,34 +138,23 @@ extract_info_hash(be_dict_t *infoval, torrent_t *t)
     be_node_t *node = NULL;
     be_dict_t *save = infoval;
 
-    DEBUG("Attempting to extract info hash...\n");
-
     if (infoval == NULL || t == NULL) {
         errno = EINVAL;
         return 1;
     }
 
     /* We need to stick infoval inside a be_node_t in order to encode it */
-    /* THIS ALLOCATION IS THE PROBLEM */
-    /* We're reading 8 bytes after this block in extract_from_bencode() */
     if ((node = (be_node_t*)calloc(1, sizeof(be_node_t))) == NULL) {
         perror("calloc");
         return 1;
     }
-    //DEBUG("Address of node is (%li)\n", (size_t)(node + 40));
     node->type = DICT;
     init_list_head(&node->link);
     init_list_head(&node->x.dict_head);
     list_add_tail(&infoval->link, &node->x.dict_head);
-    /* node->type = DICT; */
-    /* node->x.dict_head = infoval->link; */
-    /* vvv these fuckers didn't work but I'll keep em around anywhay vvv */
-    /* init_list_head(&infoval->link); */
-    /* list_add_tail(&infoval->link, &node->x.dict_head); */
 
-    /* Get the size of the required buffer */
-    /* be_num_t len = be_encode(node, NULL, 0); */
-    be_num_t len = 10000;    /* ^ won't work b/c bug, so big fucking number */
+    /* be_encode(node, NULL, 0) won't work b/c bug, so big number */
+    be_num_t len = 10000;
 
     /* Allocate a buffer in which to store the encoded data */
     if ((buf = (char*)calloc(len, sizeof(char))) == NULL) {
@@ -270,11 +257,8 @@ extract_from_bencode(torrent_t *t)
      * use in the Linux Kernel but it makes me *profoundly* uncomfortable.
      */
 
-    DEBUG("BEGIN main dict loop\n");
     list_for_each_safe(top_position, top_tmp, &t->data->x.dict_head) {
         e = list_entry(top_position, be_dict_t, link);
-        DEBUG("--- BEGIN ITERATION of main dict loop, e=(%li), key=(%s)\n",
-              (size_t)e, e->key.buf);
 
         if (!strncmp(e->key.buf, "announce\0", (size_t)e->key.len+1)) {
             if (extract_announce(e, t) != 0) {
@@ -284,18 +268,13 @@ extract_from_bencode(torrent_t *t)
         } else if (!strncmp(e->key.buf, "info", e->key.len)) {
 
             /* Get a hash of the whole info dictionary */
-            printf("Address of e is (%li)\n", (size_t)e);
             if (extract_info_hash(e, t) != 0) {
                 perror("extract_info_hash");
                 return 1;
             }
-            printf("Address of e is (%li)\n", (size_t)e);
 
-            DEBUG("--- BEGIN info dict loop\n");
             list_for_each_safe(info_position, info_tmp, &e->val->x.dict_head) {
                 se = list_entry(info_position, be_dict_t, link);
-                DEBUG("--- --- BEGIN ITERATION of info dict loop, se=(%li), key=(%s)\n",
-                      (size_t)se, se->key.buf);
 
                 if (!strncmp(se->key.buf, "length", (size_t)se->key.len)) {
                     t->file_len = se->val->x.num;
@@ -312,9 +291,7 @@ extract_from_bencode(torrent_t *t)
                         return 1;
                     }
                 }
-                DEBUG("--- --- END ITERATION of info dict loop\n");
             }
-            DEBUG("--- END info dict loop\n")
             be_dict_free(se);
 
         } else if (!strncmp(e->key.buf, "announce-list", (size_t)e->key.len)) {
@@ -328,9 +305,7 @@ extract_from_bencode(torrent_t *t)
         } else if (!strncmp(e->key.buf, "encoding", (size_t)e->key.len)) {
             be_free(e->val);
         }
-        DEBUG("--- END ITERATION of main dict loop\n");
     }
-    DEBUG("END main dict loop\n");
     be_dict_free(e);
 
     return 0;

@@ -157,7 +157,6 @@ main(int argc, char *argv[])
                     torrent_current->next = torrent_head;
                     torrent_head          = torrent_current;
                 }
-                DEBUG("Successfully parsed torrent file %s\n", argv[i]);
                 nthreads++;
             } else {
                 fputs(USAGE, stderr);
@@ -181,8 +180,6 @@ main(int argc, char *argv[])
         if (pthread_create(&threads[tnum], NULL, thread_main, t) != 0) {
             perror("pthread_create");
             return 1;
-        } else {
-            DEBUG("Launched torrent thread #%i\n", tnum);
         }
     }
 
@@ -191,8 +188,6 @@ main(int argc, char *argv[])
         if (pthread_join(threads[tnum], NULL) != 0) {
             perror("pthread_join");
             return 1;
-        } else {
-            DEBUG("Joined torrent thread #%i with main\n", tnum);
         }
     }
 
