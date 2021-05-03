@@ -8,6 +8,9 @@
 
 #include <curl/curl.h>
 
+#include "bencode/bencode.h"
+#include "bencode/list.h"
+
 #include "bitclient.h"
 #include "tracker.h"
 
@@ -66,6 +69,7 @@ gen_api_url(torrent_t *t)
 
     return urlbuf;
 }
+
 /**
  * Take the bencoded dictionary returned by a tracker (passed in BUF) and
  * extract important information from it, returning it in a tracker_t struct.
@@ -209,6 +213,8 @@ tracker_request_peers(torrent_t *t)
     CURL *     curl    = NULL;
     char *     body    = NULL;
     char *     url     = NULL;
+    tracker_t *tracker = NULL;
+    
     if (t == NULL) return 1;
 
     /* Build the tracker API url */
@@ -238,11 +244,18 @@ tracker_request_peers(torrent_t *t)
             perror("curl_easy_init");
             return 1;
         }
-        curl_easy_cleanup(curl);
-    } else {
-        perror("curl_easy_init");
+    } else {                    /* TODO support udp:// trackers */
+        FATAL("Tracker URL (%s) uses an unsupported protocol scheme :(\n",
+              t->announce);
         return 1;
     }
+
+    /* Convert the API's response into something we can use */
+    if ((tracker = tracker_parse_response(body)) == NULL) {
+        FATAL("Tracker's response is mangled or unsupported\n");
+        return 1;
+    }
+
 
     free(body);
 
