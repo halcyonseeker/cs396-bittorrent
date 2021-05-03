@@ -1,5 +1,5 @@
 CC     = gcc
-CFLAGS = -Wall -Wextra -Werror -Wpedantic -pthread -lcurl
+CFLAGS = -Wall -Wextra -Werror -Wpedantic -pthread -lcurl -lcrypto
 TARGET = bitclient
 
 # Required to link against the bencode library
@@ -17,4 +17,4 @@ tracker:
 	$(CC) $(CFLAGS) $(GFLAGS) -o tracker.o -c tracker.c
 
 clean:
-	rm -f bitclient *.o *.gcda *.gcno
+	rm -f bitclient *.o *.gcda *.gcno vgcore.*
