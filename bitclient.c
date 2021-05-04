@@ -29,44 +29,6 @@ Usage: bitclient [-vh] magnet:\n\
 
 
 /**
- * Start the process of downloading a torrent. Takes a pointer to a .torrent
- * file. Returns a pointer to the torrent file if everything went okay and
- * NULL on failure.
- */
-void *
-thread_main(void *raw)
-{
-    torrent_t *torrent = (torrent_t *)raw;
-
-    if (extract_from_bencode(torrent) != 0) {
-        FATAL("A failure occurred in extract_from_bencode()");
-        return NULL;
-    }
-
-    /* Set a "unique" 20-character ID */
-    torrent->peer_id = "12345678912345678900";
-
-    /* Set a port, we'll get a socket later */
-    torrent->port = "6881";
-
-    /* printf("piece_len = %lli\nfile_len  = %lli\nfilename  = %s\nannounce  = %s\n", */
-    /*        torrent->piece_len, */
-    /*        torrent->file_len, */
-    /*        torrent->filename, */
-    /*        torrent->announce); */
-
-    /* for (chunk_t *c = torrent->pieces; c != NULL; c = c->next) */
-    /*     printf("\t%lli\t0x%s\n", c->num, c->checksum); */
-
-    /* For now this will just print out the message returned by the tracker */
-    if (tracker_request_peers(torrent)) {
-        FATAL("Unable to request peer list from tracker.\n");
-        return NULL;
-    }
-
-    return torrent;
-}
-
  * Take a magnet link, and parse its contents into the torrent structure
  */
 torrent_t *
