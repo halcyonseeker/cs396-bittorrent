@@ -7,14 +7,14 @@ GFLAGS = -fprofile-arcs -ftest-coverage
 
 all: clean $(TARGET)
 
-bitclient: extract tracker
-	$(CC) $(CFLAGS) $(GFLAGS) -o $(TARGET) bitclient.c bencode/bencode.o extract.o tracker.o
+bitclient:
+	$(CC) $(CFLAGS) $(GFLAGS) -o $(TARGET) bitclient.c bencode/bencode.o
 
-extract:
-	$(CC) $(CFLAGS) $(GFLAGS) -o extract.o -c extract.c
+# extract:
+# 	$(CC) $(CFLAGS) $(GFLAGS) -o extract.o -c extract.c
 
-tracker:
-	$(CC) $(CFLAGS) $(GFLAGS) -o tracker.o -c tracker.c
+# tracker:
+# 	$(CC) $(CFLAGS) $(GFLAGS) -o tracker.o -c tracker.c
 
 clean:
 	rm -f bitclient *.o *.gcda *.gcno vgcore.*

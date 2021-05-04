@@ -12,8 +12,8 @@
 #include <unistd.h>
 
 #include "bitclient.h"
-#include "extract.h"
-#include "tracker.h"
+/* #include "extract.h" */
+/* #include "tracker.h" */
 
 #include "bencode/list.h"
 #include "bencode/bencode.h"
