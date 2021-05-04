@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <curl/curl.h>
 
 #include "bitclient.h"
 /* #include "extract.h" */
@@ -75,15 +76,21 @@ parse_magnet(char *magnet)
             }
             
         } else if (!strncmp("tr", token, 2)) { /* URLencoded tracker URL */
-            /* TODO: URLdecode the URL */
             if ((curr = (tracker_t*)calloc(1, sizeof(tracker_t))) == NULL) {
                 perror("calloc");
                 return NULL;
             }
-            if ((curr->url = strdup(token + 3)) == NULL) {
-                perror("strdup");
-                return NULL;
+
+            /* Decode the URL */
+            CURL *curl  = curl_easy_init();
+            if (curl) {
+                curr->url = curl_easy_unescape(curl, token+3, strlen(token)-2, NULL);
+                if (curr->url == NULL) {
+                    perror("curl-easy_unescape");
+                    return NULL;
+                }
             }
+
             /* Append to the announce linked list */
             if (prev == NULL) {
                 t->trackers = curr;
