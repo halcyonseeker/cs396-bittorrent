@@ -22,7 +22,7 @@ int log_verbosely = 0;
 
 #define USAGE                                                                  \
     "\
-Usage: bitclient [-vh] file1.torrent, ...\n\
+Usage: bitclient [-vh] magnet:\n\
     Options:\n\
         -v || --verbose        Log debugging information\n\
         -h || --help           Print this message and exit\n"
@@ -67,164 +67,135 @@ thread_main(void *raw)
     return torrent;
 }
 
-/**
- * Take the filename of a torrent file, open it, and parse to the torrent
- * struct. Return a pointer to it iff it is successfully opened and parsed.
+ * Take a magnet link, and parse its contents into the torrent structure
  */
 torrent_t *
-open_torrent(char *filename)
+parse_magnet(char *magnet)
 {
-    torrent_t *t      = NULL;
-    char *     buf    = NULL;
-    FILE *     fp     = NULL;
-    long       buflen = 0;
-    size_t     read_amount;
+    torrent_t *t     = NULL;
+    tracker_t *curr  = NULL;
+    tracker_t *prev  = NULL;
+    char      *token = NULL;
 
-    /* Open the file */
-    if ((fp = fopen(filename, "r")) == NULL) {
-        perror("fopen");
-        return NULL;
-    }
-
-    /* Get the length of the file for allocating a buffer */
-    if (fseek(fp, 0L, SEEK_END) == -1) {
-        perror("fseek");
-        return NULL;
-    }
-    if ((buflen = ftell(fp)) < 0) {
-        perror("ftell");
-        return NULL;
-    }
-
-    /* Seek back to the beginning and account for \0 */
-    rewind(fp);
-    buflen++;
-
-    /* Allocate the buffer to be passed to be_decode() */
-    if ((buf = (char *)calloc(buflen, sizeof(char))) == NULL) {
-        perror("calloc");
-        return NULL;
-    }
+    if (magnet == NULL) return NULL;
 
     /* Allocate the torrent struct */
-    if ((t = calloc(1, sizeof(torrent_t))) == NULL) {
+    if ((t = (torrent_t*)calloc(1, sizeof(torrent_t))) == NULL) {
         perror("calloc");
         return NULL;
     }
 
-    /* Read the torrent file into buf for passing to be_decode() */
-    if (fread((void *)buf, sizeof(char), buflen, fp) < (size_t)buflen - 1) {
-        perror("fread");
+    /* Increment the magnet pointer to the first '?' */
+    if ((magnet = strchr(magnet, '?') + 1) == NULL) {
+        FATAL("Invalid magnet URL\n");
         return NULL;
     }
 
-    /* Decode the file */
-    if ((t->data = be_decode(buf, buflen, &read_amount)) == NULL) {
-        perror("be_decode");
-        return NULL;
-    }
+    char *div = NULL;
+    /* Extract the key-value pairs from the magnet */
+    while ((div = strchr(magnet, '&')) != NULL) {
+        if ((token = strndup(magnet, (size_t)(div - magnet))) == NULL) {
+            perror("strndup");
+            return NULL;
+        }
 
-    free(buf);
-    fclose(fp);
+        if (!strncmp("xt", token, 2)) {        /* File hash */
+            /* TODO: make the hash not hexadecimal */
+            if ((t->info_hash = strdup(strrchr(token, ':') + 1)) == NULL) {
+                perror("strdup");
+                return NULL;
+            }
+            
+        } else if (!strncmp("dn", token, 2)) { /* Torrent name */
+            if ((t->filename = strdup(token + 3)) == NULL) {
+                perror("strdup");
+                return NULL;
+            }
+            
+        } else if (!strncmp("tr", token, 2)) { /* URLencoded tracker URL */
+            /* TODO: URLdecode the URL */
+            if ((curr = (tracker_t*)calloc(1, sizeof(tracker_t))) == NULL) {
+                perror("calloc");
+                return NULL;
+            }
+            if ((curr->url = strdup(token + 3)) == NULL) {
+                perror("strdup");
+                return NULL;
+            }
+            /* Append to the announce linked list */
+            if (prev == NULL) {
+                t->trackers = curr;
+                prev = curr;
+            } else {
+                prev->next = curr;
+                prev = curr;
+            }
+        }
+        magnet = div + 1;
+    } 
     return t;
 }
 
 int
 main(int argc, char *argv[])
 {
-    torrent_t *torrent_head = NULL, *torrent_current = NULL;
-
-    int nthreads = 0, tnum = 0;
+    torrent_t *t      = NULL;
+    char *     magnet = NULL;
 
     if (argc < 2) {
-        fputs(USAGE, stderr);
-        FATAL("No arguments were provided\n");
-        return 1;
+        FATAL("%s", USAGE);
+        FATAL("1\n");
+        return -1;
     }
 
-    /* Check for arguments and build the linked list of torrents */
-    for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--verbose"))
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--verbose")) {
             log_verbosely = 1;
-        else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            fputs(USAGE, stdout);
+        } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            printf("%s", USAGE);
             return 0;
         } else {
-            if ((torrent_current = open_torrent(argv[i])) != NULL) {
-                if (torrent_head == NULL)
-                    torrent_head = torrent_current;
-                else {
-                    torrent_current->next = torrent_head;
-                    torrent_head          = torrent_current;
-                }
-                nthreads++;
-            } else {
-                fputs(USAGE, stderr);
-                FATAL("open_torrent() returned NULL\n");
-                FATAL("A file either doesn't exist or is garbled\n");
-                return 1;
-            }
+            if (!strncmp("magnet:", argv[i], 7)) {
+                if (magnet == NULL) magnet = argv[i];
+                else continue;
+            } 
         }
     }
 
-    pthread_t threads[nthreads];
-
-    if (torrent_head == NULL) {
-        fputs(USAGE, stderr);
-        FATAL("torrent_head is NULL\n");
-        return 1;
+    /* Get information from the URL */
+    if ((t = parse_magnet(magnet)) == NULL) {
+        FATAL("Failed to parse magent link\n");
     }
 
-    /* Launch a new thread for each torrent */
-    for (torrent_t *t = torrent_head; t != NULL; t = t->next, tnum++) {
-        if (pthread_create(&threads[tnum], NULL, thread_main, t) != 0) {
-            perror("pthread_create");
-            return 1;
-        }
+    if (t == NULL) {
+        FATAL("%s", USAGE);
+        FATAL("3\n");
+        return -1;
     }
 
-    /* Join the threads */
-    for (tnum = 0; tnum < nthreads; tnum++) {
-        if (pthread_join(threads[tnum], NULL) != 0) {
-            perror("pthread_join");
-            return 1;
-        }
-    }
+    /* Generate a peer ID */
 
-    DEBUG("Exiting cleanly...\n");
+    /* Ask each of the trackers for peer information */
 
-    /* Free the torrents */
-    torrent_t *t_save;
-    chunk_t *  c_save;
-    peers_t *  p_save;
-    for (torrent_t *t = torrent_head; t != NULL; t = t_save) {
-        /* t->data should have been saved earlier */
-        free(t->filename);
-        free(t->announce);
-        free(t->info_hash);
-        if (t->trackers != NULL) {
-            free(t->trackers->id);
-            if (t->trackers->peers != NULL) {
-                for (peers_t *p = t->trackers->peers; p != NULL; p = p_save) {
-                    free(p->id);
-                    free(p->ip);
-                    free(p->port);
-                    p_save = p->next;
-                    free(p);
-                }
-            }
-            free(t->trackers);
-        }
-        if (t->pieces != NULL) {
-            for (chunk_t *c = t->pieces; c != NULL; c = c_save) {
-                free(c->checksum);
-                c_save = c->next;
-                free(c);
-            }
-        }
-        t_save = t->next;
-        free(t);
-    }
+    printf("Torrent structure:\n");
+    printf("\tpeer_id   = %s\n", t->peer_id);
+    printf("\tinfo_hash = %s\n", t->info_hash);
+    printf("\tfilename  = %s\n", t->filename);
+    printf("\tTrackers we know:\n");
+    for (tracker_t *tr = t->trackers; tr->next != NULL; tr = tr->next)
+        printf("\t\t%s\n", tr->url);
+    printf("\tPeers we know of:\n");
+    for (peers_t *p = t->peers; p->next != NULL; p = p->next)
+        printf("\t\t%s\t%s\t%s\n", p->id, p->ip, p->port);
+    printf("\tChunks we need:\n");
+    for (chunk_t *c = t->pieces; c->next != NULL; c = c->next)
+        printf("\t\t%lli\t%s\n", c->num, c->checksum);
+    printf("\tpiece_len = %lli\n", t->piece_len);
+    printf("\tfile_len  = %lli\n", t->file_len);
+
+    /* TODO: print information about peers */
+
+    /* Now we can start a seeder and a leacher thread :3 */
 
     return 0;
 }
