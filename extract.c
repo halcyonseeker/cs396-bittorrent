@@ -131,73 +131,50 @@ extract_info_pieces(be_dict_t *d, torrent_t *t)
 static int
 extract_info_hash(be_dict_t *infoval, torrent_t *t)
 {
-    CURL *curl;
-    char *buf = NULL;
-    char *url = NULL;
-    unsigned char *sha = NULL;
-    be_node_t *node = NULL;
-    be_dict_t *save = infoval;
+    ssize_t    len   = 0;
+    ssize_t    bytes = 0;
+    char *     buf   = NULL;
+    char *     url   = NULL;
+    be_node_t *node  = NULL;
+    char       hash[21];
 
-    if (infoval == NULL || t == NULL) {
-        errno = EINVAL;
-        return 1;
-    }
-
-    /* We need to stick infoval inside a be_node_t in order to encode it */
+    /* Insert the dictionary into a be_node_t for encoding */
     if ((node = (be_node_t*)calloc(1, sizeof(be_node_t))) == NULL) {
         perror("calloc");
         return 1;
     }
     node->type = DICT;
-    init_list_head(&node->link);
     init_list_head(&node->x.dict_head);
-    list_add_tail(&infoval->link, &node->x.dict_head);
+    list_add(&infoval->link, &node->x.dict_head);
 
-    /* be_encode(node, NULL, 0) won't work b/c bug, so big number */
-    be_num_t len = 10000;
-
-    /* Allocate a buffer in which to store the encoded data */
-    if ((buf = (char*)calloc(len, sizeof(char))) == NULL) {
+    /* Allocate a buffer in which to store the bencoded dictionary */
+    len = be_encode(node, NULL, 0); /* 46155 for minix3.torrent; OK */
+    if ((buf = (char*)calloc(len + 1, sizeof(char))) == NULL) {
         perror("calloc");
         return 1;
     }
 
-    /* Bencode the dictionary, saving the result in buf */
-    if (be_encode(node, buf, len) == 0) {
+    DEBUG("Info piece value: %s\n", infoval->val->x.str.buf);
+
+    /* Encode the data */
+    /* TODO be_encode truncates the pieces entry :( */
+    if ((bytes = be_encode(node, buf, len)) < len) {
         perror("be_encode");
         return 1;
     }
 
-    DEBUG("Bencoded info dict: (%s)\n", buf); /* MISSING PIECES KEY */
-
-    /* Now make the aforementioned big fucking number smaller for SHA1 */
-    len = strlen(buf);
-
-    /* Allocate a buffer for the checksum */
-    if ((sha = (unsigned char*)malloc(21)) == NULL) {
-        perror("malloc");
-        return 1;
-    }
-    sha[20] = '\0';
-
-    /* Compute the checksum */
-    if ((sha = SHA1((unsigned char*)buf, len, sha)) == NULL) {
+    /* Compute the checksum and store it in hash */
+    memset(&hash, 0, 21);
+    if (SHA1((unsigned char*)buf, len, (unsigned char*)hash) == NULL) {
         perror("SHA1");
         return 1;
     }
 
-    DEBUG("SHA1 hash of info dict: (%s)\n", sha);
-
-    /* Allocate a buffer to store the URLencoded checksum in */
-    if ((url = (char*)calloc(100, sizeof(char))) == NULL) {
-        perror("calloc");
-        return 1;
-    }
-
-    /* URLencode the checksum */
-    if ((curl = curl_easy_init()) != NULL) {
-        if ((url = curl_easy_escape(curl, (char*)sha, 20)) == NULL) {
-            perror("curl_easy_escape");
+    /* Set up CURL and URLencode the checksum, storing it in url */
+    CURLcode *curl = curl_easy_init();
+    if (curl) {
+        if ((url = curl_easy_escape(curl, hash, 20)) == NULL) {
+            perror("curl_easy_init");
             return 1;
         }
         curl_easy_cleanup(curl);
@@ -206,18 +183,11 @@ extract_info_hash(be_dict_t *infoval, torrent_t *t)
         return 1;
     }
 
-    /* Resize the buffer of URLencoded data */
-    if ((url = (char*)realloc(url, strlen(url)+1)) == NULL) {
-        perror("realloc");
-        return 1;
-    }
+    DEBUG("BENCODED INFO DICT: %s\n", buf);
 
-    DEBUG("URLendoced sha1 hash: (%s)\n", url);
+    t->info_hash = url;
 
-    t->info_hash = (char*)url;
-    infoval = save;
-
-    free(sha);
+    /* TODO: how do I properly free the be_node_t??? */
     free(buf);
     return 0;
 }
