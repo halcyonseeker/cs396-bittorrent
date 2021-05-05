@@ -142,7 +142,7 @@ parse_magnet(char *magnet)
 
     /* Extract the key-value pairs from the magnet */
     char *div = NULL;
-    while ((div = strchr(magnet, '&')) != NULL) {
+    while ((div = strchr(magnet, '&')) != NULL || strrchr(magnet, '&') == NULL) {
         if ((token = strndup(magnet, (size_t)(div - magnet))) == NULL) {
             perror("strndup");
             return NULL;
@@ -203,9 +203,26 @@ parse_magnet(char *magnet)
                 prev = curr;
             }
         }
-        magnet = div + 1;
         free(token);
+        magnet = div + 1;
+        if (div == NULL) break;
     } 
+
+    if (t->info_hash == NULL) {
+        FATAL("Mangled magnet, failed to extract info hash\n");
+        return NULL;
+    }
+
+    if (t->trackers == NULL) {
+        FATAL("Mangled magnet, failed to extract trackers\n");
+        return NULL;
+    }
+
+    if (t->filename == NULL) {
+        FATAL("Mangled magnet, failed to extract filename\n");
+        return NULL;
+    }
+
     return t;
 }
 
@@ -262,17 +279,17 @@ main(int argc, char *argv[])
     printf("\tfilename  = %s\n", t->filename);
     if (t->trackers != NULL) {
         printf("\tTrackers we know:\n");
-        for (tracker_t *tr = t->trackers; tr->next != NULL; tr = tr->next)
+        for (tracker_t *tr = t->trackers; tr != NULL; tr = tr->next)
             printf("\t\t%s\n", tr->url);
     }
     if (t->peers != NULL) {
         printf("\tPeers we know of:\n");
-        for (peers_t *p = t->peers; p->next != NULL; p = p->next)
+        for (peers_t *p = t->peers; p != NULL; p = p->next)
             printf("\t\t%s\t%s\t%s\n", p->id, p->ip, p->port);
     }
     if (t->pieces != NULL) {
         printf("\tChunks we need:\n");
-        for (chunk_t *c = t->pieces; c->next != NULL; c = c->next)
+        for (chunk_t *c = t->pieces; c != NULL; c = c->next)
             printf("\t\t%lli\t%s\n", c->num, c->checksum);
     }
     printf("\tpiece_len = %lli\n", t->piece_len);
