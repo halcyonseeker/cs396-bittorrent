@@ -88,7 +88,7 @@ tracker_initial_request(torrent_t *t)
         /* Handle udp and http(s) trackers differently */
         if (!strncmp(a->url, "udp", 3)) {
             /* We're at the end of the list and haven't seen a http tracker */
-            if (a->next == NULL) {
+            if (a->next->next == NULL) {
                 FATAL("Sorry, we don't support UDP trackers yet\n");
                 return -1;
             }
