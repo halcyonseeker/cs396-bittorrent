@@ -255,8 +255,9 @@ magnet_request_tracker(torrent_t *t)
 
             /* Create a tracker API url */
             memset(url, 0, 1024);
-            sprintf(url, "%s?info_hash=%s&peer_id=%sport=%s&event=%s",
-                    a->url, t->info_hash, t->peer_id, t->port, t->event);
+            sprintf(url, "%s?info_hash=%s&peer_id=%s&port=%s&uploaded=%lli&downloaded=%lli&left=%lli&compact=%s&event=%s",
+                    a->url, t->info_hash, t->peer_id, t->port, t->uploaded,
+                    t->dloaded, t->left, "0", t->event);
 
             if ((curl = curl_easy_init()) != NULL) {
                 curl_easy_setopt(curl, CURLOPT_URL, url);
