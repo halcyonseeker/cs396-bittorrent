@@ -264,7 +264,12 @@ magnet_request_tracker(torrent_t *t)
                 curl_easy_setopt(curl, CURLOPT_URL, url);
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)body);
+                curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
                 err = curl_easy_perform(curl);
+                if (err == CURLE_OPERATION_TIMEDOUT) {
+                    fprintf(stderr, "CURL: %s\n", curl_easy_strerror(err));
+                    continue;
+                }
                 if (err) {
                     FATAL("CURL failed to reach tracker API: %s\n",
                           curl_easy_strerror(err));
@@ -276,7 +281,17 @@ magnet_request_tracker(torrent_t *t)
         }
     }
 
-    DEBUG("BODY: %s\n", body);
+    DEBUG("BODY: (%s)\n", body);
+    if (*body == '\0') {
+        FATAL("None of the trackers responded :(\n");
+        return -1;
+    }
+
+    /* Decode the tracker's response */
+    if (extract_tracker_bencode(t, body) < 0) {
+        FATAL("Error occurred while parsing the request body\n");
+        return -1;
+    }
 
     free(body);
     return 0;
