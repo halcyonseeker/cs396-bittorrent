@@ -15,6 +15,8 @@
 
 #include "bitclient.h"
 #include "magnet.h"
+#include "leecher.h"
+#include "seeder.h"
 
 int log_verbosely = 0;
 
