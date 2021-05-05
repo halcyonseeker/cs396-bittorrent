@@ -143,6 +143,7 @@ main(int argc, char *argv[])
     }
 
     /* Generate a peer ID */
+    t->peer_id = "12345678912345678900";
 
     /* Ask each of the trackers for peer information */
 
