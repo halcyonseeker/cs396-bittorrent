@@ -50,6 +50,72 @@ hex_to_binary(void const* vinput, void* voutput, size_t byte_length)
 }
 
 /**
+ * See CURLOPT_WRITEFUNCTION(3)
+ */
+static size_t
+write_callback(void *data, size_t size, size_t nmemb, void *userp)
+{
+    memcpy(userp, data, size * nmemb);
+    return size * nmemb;
+}
+
+/**
+ * Send an initial request to a tracker. Returns 0 iff we successfully
+ * received and parsed peer and chunk information.
+ */
+int
+tracker_initial_request(torrent_t *t)
+{
+    CURL *curl = NULL;
+    char *body = NULL;
+    char url[1024];
+
+    if (t == NULL) return -1;
+
+    /* Allocate a buffer to store curl's response */
+    if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE, sizeof(char))) == NULL) {
+        perror("calloc");
+        return -1;
+    }
+
+
+    /* Try each of the announce urls until one works */
+    for (tracker_t *a = t->trackers; a->next != NULL; a = a->next) {
+        memset(url, 0, 1024);
+        sprintf(url, "%s?info_hash=%s&peer_id=%sport=%s",
+                a->url, t->info_hash, t->peer_id, t->port);
+
+        /* Handle udp and http(s) trackers differently */
+        if (!strncmp(a->url, "udp", 3)) {
+            /* We're at the end of the list and haven't seen a http tracker */
+            if (a->next == NULL) {
+                FATAL("Sorry, we don't support UDP trackers yet\n");
+                return -1;
+            }
+        } else if (!strncmp(a->url, "http", 4)) {
+            if ((curl = curl_easy_init()) != NULL) {
+                curl_easy_setopt(curl, CURLOPT_URL, url);
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)body);
+                CURLcode err = curl_easy_perform(curl);
+                if (err) {
+                    FATAL("CURL failed to reach tracker API: %s\n",
+                          curl_easy_strerror(err));
+                    return -1;
+                }
+                curl_easy_cleanup(curl);
+                break;
+            }
+        }
+    }
+
+    DEBUG("BODY: %s\n", body);
+
+    free(body);
+    return 0;
+}
+
+/**
  * Take a magnet link, and parse its contents into the torrent structure
  */
 torrent_t *
@@ -180,10 +246,15 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    /* Generate a peer ID */
     t->peer_id = "12345678912345678900";
+    t->port    = "6881";
+    t->event   = "started";
 
-    /* Ask each of the trackers for peer information */
+    /* Fill out the fields of the torrent struct with info from a tracker */
+    if (tracker_initial_request(t) < 0) {
+        FATAL("Failed to get information from the tracker\n");
+        return -1;
+    }
 
     printf("Torrent structure:\n");
     printf("\tpeer_id   = %s\n", t->peer_id);
