@@ -19,6 +19,9 @@
 
 #include "magnet.h"
 
+#include "bencode/bencode.h"
+#include "bencode/list.h"
+
 
 
 /************* S M A L L   H E L P E R   F U N C T I O N S *************/
@@ -171,7 +174,49 @@ udp_initial_request(torrent_t *t, char *url)
 static int
 extract_tracker_bencode(torrent_t *t, char *body)
 {
+    be_node_t *bencode = NULL;
+    be_dict_t *entry;
+    list_t *   pos, *tmp;
+    size_t     read;
 
+    if (t == NULL || body == NULL) return -1;
+
+    /* Convert the body into a bencode dictionary */
+    if ((bencode = be_decode(body, strlen(body), &read)) == NULL) {
+        perror("be_decode");
+        return -1;
+    }
+
+    if (bencode->type != DICT) {
+        FATAL("The tracker didn't return a dictionary");
+        return -1;
+    }
+
+    /* Iterate over the dictionary using macros defined in bencode/list.h */
+    list_for_each_safe(pos, tmp, &bencode->x.dict_head) {
+        entry = list_entry(pos, be_dict_t, link);
+
+        /* TODO: there are other fields I should support */
+        if (!strcmp(entry->key.buf, "failure reason")) {
+            FATAL("Tracker responded with failure: %s\n", entry->val->x.str.buf);
+
+        } else if (!strcmp(entry->key.buf, "complete")) {
+            /* Number of peers with the complete file */
+            continue;
+        } else if (!strcmp(entry->key.buf, "incomplete")) {
+            /* Number of leachers */
+            continue;
+        } else if (!strcmp(entry->key.buf, "interval")) {
+            /* Number of seconds to wait before sending another request */
+            continue;
+        } else if (!strcmp(entry->key.buf, "peers")) {
+            /* This is where we build the linked list of peers */
+            continue;
+        }
+        be_dict_free(entry);
+    }
+
+    return 0;
 }
 
 
