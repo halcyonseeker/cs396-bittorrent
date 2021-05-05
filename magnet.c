@@ -175,8 +175,8 @@ static int
 extract_tracker_bencode(torrent_t *t, char *body)
 {
     be_node_t *bencode = NULL;
-    be_dict_t *entry;
-    list_t *   pos, *tmp;
+    be_dict_t *entry, *peer;
+    list_t *   top_pos, *top_tmp;
     size_t     read;
 
     if (t == NULL || body == NULL) return -1;
@@ -193,8 +193,8 @@ extract_tracker_bencode(torrent_t *t, char *body)
     }
 
     /* Iterate over the dictionary using macros defined in bencode/list.h */
-    list_for_each_safe(pos, tmp, &bencode->x.dict_head) {
-        entry = list_entry(pos, be_dict_t, link);
+    list_for_each_safe(top_pos, top_tmp, &bencode->x.dict_head) {
+        entry = list_entry(top_pos, be_dict_t, link);
 
         /* TODO: there are other fields I should support */
         if (!strcmp(entry->key.buf, "failure reason")) {
@@ -203,15 +203,58 @@ extract_tracker_bencode(torrent_t *t, char *body)
         } else if (!strcmp(entry->key.buf, "complete")) {
             /* Number of peers with the complete file */
             continue;
+
         } else if (!strcmp(entry->key.buf, "incomplete")) {
             /* Number of leachers */
             continue;
+
         } else if (!strcmp(entry->key.buf, "interval")) {
             /* Number of seconds to wait before sending another request */
             continue;
+
         } else if (!strcmp(entry->key.buf, "peers")) {
             /* This is where we build the linked list of peers */
-            continue;
+            peers_t *curr, *prev;
+            list_t  *peer_pos, *peer_tmp;
+
+            list_for_each_safe(peer_pos, peer_tmp, &entry->val->x.dict_head) {
+                peer = list_entry(peer_pos, be_dict_t, link);
+
+                if ((curr = (peers_t*)calloc(1, sizeof(peers_t))) == NULL) {
+                    perror("calloc");
+                    return -1;
+                }
+
+                /* SEGFAULT because apparently peer->key.buf = 0x3 ???????? */
+                if (!strcmp("peer id", peer->key.buf)) {
+                    if ((curr->id = strdup(peer->val->x.str.buf)) == NULL) {
+                        perror("strdup");
+                        return -1;
+                    }
+
+                } else if (!strcmp("ip", peer->key.buf)) {
+                    if ((curr->ip = strdup(peer->val->x.str.buf)) == NULL) {
+                        perror("strdup");
+                        return -1;
+                    }
+
+                } else if (!strcmp("port", peer->key.buf)) {
+                    if ((curr->port = strdup(peer->val->x.str.buf)) == NULL) {
+                        perror("strdup");
+                        return -1;
+                    }
+                }
+                /* Append this peer to the torrent structure's linked list */
+                if (prev == NULL) {
+                    t->peers = curr;
+                    prev = curr;
+                } else {
+                    prev->next = curr;
+                    prev = curr;
+                }
+            }
+            DEBUG("AFTER PEER LOOP\n");
+            be_dict_free(peer);
         }
         be_dict_free(entry);
     }
@@ -240,7 +283,7 @@ magnet_request_tracker(torrent_t *t)
         if (!strncmp(a->url, "udp", 3)) {
             /* TODO implement timeouts and retries as per the spec */
             body = udp_initial_request(t, a->url);
-            break;
+            continue;
 
         } else if (!strncmp(a->url, "http", 4)) {
             CURLcode err;
