@@ -25,53 +25,9 @@ Usage: bitclient [-vh] magnet:\n\
         -v || --verbose        Log debugging information\n\
         -h || --help           Print this message and exit\n"
 
-int
-main(int argc, char *argv[])
+void
+print_torrent(torrent_t *t)
 {
-    torrent_t *t      = NULL;
-    char *     magnet = NULL;
-
-    if (argc < 2) {
-        FATAL("%s", USAGE);
-        FATAL("1\n");
-        return -1;
-    }
-
-    for (int i = 0; i < argc; i++) {
-        if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--verbose")) {
-            log_verbosely = 1;
-        } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            printf("%s", USAGE);
-            return 0;
-        } else {
-            if (!strncmp("magnet:", argv[i], 7)) {
-                if (magnet == NULL) magnet = argv[i];
-                else continue;
-            } 
-        }
-    }
-
-    /* Get information from the URL */
-    if ((t = magnet_parse_uri(magnet)) == NULL) {
-        FATAL("Failed to parse magent link\n");
-    }
-
-    if (t == NULL) {
-        FATAL("%s", USAGE);
-        FATAL("3\n");
-        return -1;
-    }
-
-    t->peer_id = "-PC0001-478269329936";
-    t->port    = "6881";
-    t->event   = "started";
-
-    /* Fill out the fields of the torrent struct with info from a tracker */
-    if (magnet_request_tracker(t) < 0) {
-        FATAL("Failed to get information from the tracker\n");
-        return -1;
-    }
-
     printf("Torrent structure:\n");
     printf("\tpeer_id   = %s\n", t->peer_id);
     printf("\tinfo_hash = %s\n", t->info_hash);
@@ -98,10 +54,11 @@ main(int argc, char *argv[])
     printf("\tuploaded  = %lli\n", t->uploaded);
     printf("\tdloaded   = %lli\n", t->dloaded);
     printf("\tleft      = %lli\n", t->left);
+}
 
-    /* Now we can start a seeder and a leacher thread :3 */
-
-    /* Free the torrent */
+void
+free_torrent(torrent_t *t)
+{
     curl_free(t->info_hash);
     free(t->filename);
     if (t->trackers != NULL) {
@@ -131,6 +88,55 @@ main(int argc, char *argv[])
         }
     }
     free(t);
+}
+
+int
+main(int argc, char *argv[])
+{
+    torrent_t *t      = NULL;
+    char *     magnet = NULL;
+
+    if (argc < 2) {
+        FATAL("%s", USAGE);
+        return -1;
+    }
+
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--verbose")) {
+            log_verbosely = 1;
+        } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            printf("%s", USAGE);
+            return 0;
+        } else {
+            if (!strncmp("magnet:", argv[i], 7)) {
+                if (magnet == NULL) magnet = argv[i];
+                else continue;
+            } 
+        }
+    }
+
+    /* Get information from the URL */
+    if ((t = magnet_parse_uri(magnet)) == NULL) {
+        FATAL("Failed to parse magent link\n");
+        FATAL("%s", USAGE);
+        return -1;
+    }
+
+    /* Fill out the fields of the torrent struct with info from a tracker */
+    t->peer_id = "-PC0001-478269329936";
+    t->port    = "6881";
+    t->event   = "started";
+    if (magnet_request_tracker(t) < 0) {
+        FATAL("Failed to get information from the tracker\n");
+        return -1;
+    }
+
+    /* In order for the seeder and leacher to work, T must be full */
+    if (log_verbosely) print_torrent(t);
+
+    /* Now we can start a seeder and a leacher thread :3 */
+
+    free_torrent(t);
 
     return 0;
 }
