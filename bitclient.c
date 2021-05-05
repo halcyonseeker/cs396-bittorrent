@@ -5,11 +5,13 @@
  */
 
 #include <errno.h>
+#include <ctype.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <curl/curl.h>
 
 #include "bitclient.h"
@@ -28,6 +30,24 @@ Usage: bitclient [-vh] magnet:\n\
         -v || --verbose        Log debugging information\n\
         -h || --help           Print this message and exit\n"
 
+/**
+ * Base conversion is fiddly and error-prone so I borrowed this from here:
+ * https://github.com/transmission/transmission/blob/master/libtransmission/utils.c#L815
+ */
+void
+hex_to_binary(void const* vinput, void* voutput, size_t byte_length)
+{
+    static char const hex[] = "0123456789abcdef";
+
+    uint8_t const* input = (uint8_t const*)vinput;
+    uint8_t* output = voutput;
+
+    for (size_t i = 0; i < byte_length; ++i) {
+        int const hi = strchr(hex, tolower(*input++)) - hex;
+        int const lo = strchr(hex, tolower(*input++)) - hex;
+        *output++ = (uint8_t)((hi << 4) | lo);
+    }
+}
 
 /**
  * Take a magnet link, and parse its contents into the torrent structure
@@ -54,8 +74,8 @@ parse_magnet(char *magnet)
         return NULL;
     }
 
-    char *div = NULL;
     /* Extract the key-value pairs from the magnet */
+    char *div = NULL;
     while ((div = strchr(magnet, '&')) != NULL) {
         if ((token = strndup(magnet, (size_t)(div - magnet))) == NULL) {
             perror("strndup");
@@ -63,11 +83,27 @@ parse_magnet(char *magnet)
         }
 
         if (!strncmp("xt", token, 2)) {        /* File hash */
-            /* TODO: make the hash not hexadecimal */
-            if ((t->info_hash = strdup(strrchr(token, ':') + 1)) == NULL) {
+            char *hex, bin[100], *binptr = &bin[0];
+            memset(bin, 0, 100);
+
+            if ((hex = strdup(strrchr(token, ':') + 1)) == NULL) {
                 perror("strdup");
                 return NULL;
             }
+
+            /* Hex is just too pretty, so we need URL-encoded binary :/ */
+            hex_to_binary(hex, binptr, 20);
+            CURL *curl = curl_easy_init();
+            if (curl) {
+                t->info_hash = curl_easy_escape(curl, binptr, strlen(binptr));
+                if (t->info_hash == NULL) {
+                    perror("curl_easy_unescape");
+                    return NULL;
+                }
+                curl_easy_cleanup(curl);
+            }
+
+            free(hex);
             
         } else if (!strncmp("dn", token, 2)) { /* Torrent name */
             if ((t->filename = strdup(token + 3)) == NULL) {
@@ -86,7 +122,7 @@ parse_magnet(char *magnet)
             if (curl) {
                 curr->url = curl_easy_unescape(curl, token+3, strlen(token)-2, NULL);
                 if (curr->url == NULL) {
-                    perror("curl-easy_unescape");
+                    perror("curl_easy_unescape");
                     return NULL;
                 }
                 curl_easy_cleanup(curl);
