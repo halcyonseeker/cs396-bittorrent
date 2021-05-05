@@ -150,19 +150,28 @@ main(int argc, char *argv[])
     printf("\tpeer_id   = %s\n", t->peer_id);
     printf("\tinfo_hash = %s\n", t->info_hash);
     printf("\tfilename  = %s\n", t->filename);
-    printf("\tTrackers we know:\n");
-    for (tracker_t *tr = t->trackers; tr->next != NULL; tr = tr->next)
-        printf("\t\t%s\n", tr->url);
-    printf("\tPeers we know of:\n");
-    for (peers_t *p = t->peers; p->next != NULL; p = p->next)
-        printf("\t\t%s\t%s\t%s\n", p->id, p->ip, p->port);
-    printf("\tChunks we need:\n");
-    for (chunk_t *c = t->pieces; c->next != NULL; c = c->next)
-        printf("\t\t%lli\t%s\n", c->num, c->checksum);
-    printf("\tpiece_len = %lli\n", t->piece_len);
-    printf("\tfile_len  = %lli\n", t->file_len);
-
-    /* TODO: print information about peers */
+    if (t->trackers != NULL) {
+        printf("\tTrackers we know:\n");
+        for (tracker_t *tr = t->trackers; tr->next != NULL; tr = tr->next)
+            printf("\t\t%s\n", tr->url);
+    }
+    if (t->peers != NULL) {
+        printf("\tPeers we know of:\n");
+        for (peers_t *p = t->peers; p->next != NULL; p = p->next)
+            printf("\t\t%s\t%s\t%s\n", p->id, p->ip, p->port);
+    }
+    if (t->pieces != NULL) {
+        printf("\tChunks we need:\n");
+        for (chunk_t *c = t->pieces; c->next != NULL; c = c->next)
+            printf("\t\t%lli\t%s\n", c->num, c->checksum);
+    }
+    /* printf("\tpiece_len = %lli\n", t->piece_len); */
+    /* printf("\tfile_len  = %lli\n", t->file_len); */
+    /* printf("\tport      = %s\n", t->port); */
+    /* printf("\tevent     = %s\n", t->event); */
+    /* printf("\tuploaded  = %lli\n", t->uploaded); */
+    /* printf("\tdloaded   = %lli\n", t->dloaded); */
+    /* printf("\tleft      = %lli\n", t->left); */
 
     /* Now we can start a seeder and a leacher thread :3 */
 
