@@ -62,7 +62,7 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    t->peer_id = "12345678912345678900";
+    t->peer_id = "-PC0001-478269329936";
     t->port    = "6881";
     t->event   = "started";
 
