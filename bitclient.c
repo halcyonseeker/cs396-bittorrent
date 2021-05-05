@@ -5,7 +5,6 @@
  */
 
 #include <errno.h>
-#include <ctype.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +14,7 @@
 #include <curl/curl.h>
 
 #include "bitclient.h"
+#include "magnet.h"
 /* #include "extract.h" */
 /* #include "tracker.h" */
 
@@ -29,201 +29,6 @@ Usage: bitclient [-vh] magnet:\n\
     Options:\n\
         -v || --verbose        Log debugging information\n\
         -h || --help           Print this message and exit\n"
-
-/**
- * Base conversion is fiddly and error-prone so I borrowed this from here:
- * github.com/transmission/transmission/blob/master/libtransmission/utils.c#L815
- */
-void
-hex_to_binary(void const* vinput, void* voutput, size_t byte_length)
-{
-    static char const hex[] = "0123456789abcdef";
-
-    uint8_t const* input = (uint8_t const*)vinput;
-    uint8_t* output = voutput;
-
-    for (size_t i = 0; i < byte_length; ++i) {
-        int const hi = strchr(hex, tolower(*input++)) - hex;
-        int const lo = strchr(hex, tolower(*input++)) - hex;
-        *output++ = (uint8_t)((hi << 4) | lo);
-    }
-}
-
-/**
- * See CURLOPT_WRITEFUNCTION(3)
- */
-static size_t
-write_callback(void *data, size_t size, size_t nmemb, void *userp)
-{
-    memcpy(userp, data, size * nmemb);
-    return size * nmemb;
-}
-
-/**
- * Send an initial request to a tracker. Returns 0 iff we successfully
- * received and parsed peer and chunk information.
- */
-int
-tracker_initial_request(torrent_t *t)
-{
-    char *body = NULL;
-
-    if (t == NULL) return -1;
-    /* Try each of the announce urls until one works */
-    for (tracker_t *a = t->trackers; a != NULL; a = a->next) {
-        if (!strncmp(a->url, "udp", 3)) {
-            /* TODO implement timeouts and retries as per the spec */
-            /* body = udp_initial_request(t, a->url); */
-            break;
-
-        } else if (!strncmp(a->url, "http", 4)) {
-            CURLcode err;
-            CURL *curl = NULL;
-            char url[1024];
-
-            /* Allocate a buffer to store curl's response */
-            if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE, sizeof(char))) == NULL) {
-                perror("calloc");
-                return -1;
-            }
-
-            /* Create a tracker API url */
-            memset(url, 0, 1024);
-            sprintf(url, "%s?info_hash=%s&peer_id=%sport=%s",
-                    a->url, t->info_hash, t->peer_id, t->port);
-
-            if ((curl = curl_easy_init()) != NULL) {
-                curl_easy_setopt(curl, CURLOPT_URL, url);
-                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-                curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)body);
-                err = curl_easy_perform(curl);
-                if (err) {
-                    FATAL("CURL failed to reach tracker API: %s\n",
-                          curl_easy_strerror(err));
-                    return -1;
-                }
-                curl_easy_cleanup(curl);
-                break;
-            }
-        }
-    }
-
-    DEBUG("BODY: %s\n", body);
-
-    free(body);
-    return 0;
-}
-
-/**
- * Take a magnet link, and parse its contents into the torrent structure
- */
-torrent_t *
-parse_magnet(char *magnet)
-{
-    torrent_t *t     = NULL;
-    tracker_t *curr  = NULL;
-    tracker_t *prev  = NULL;
-    char      *token = NULL;
-
-    if (magnet == NULL) return NULL;
-
-    /* Allocate the torrent struct */
-    if ((t = (torrent_t*)calloc(1, sizeof(torrent_t))) == NULL) {
-        perror("calloc");
-        return NULL;
-    }
-
-    /* Increment the magnet pointer to the first '?' */
-    if ((magnet = strchr(magnet, '?') + 1) == NULL) {
-        FATAL("Invalid magnet URL\n");
-        return NULL;
-    }
-
-    /* Extract the key-value pairs from the magnet */
-    char *div = NULL;
-    while ((div = strchr(magnet, '&')) != NULL || strrchr(magnet, '&') == NULL) {
-        if ((token = strndup(magnet, (size_t)(div - magnet))) == NULL) {
-            perror("strndup");
-            return NULL;
-        }
-
-        if (!strncmp("xt", token, 2)) {        /* File hash */
-            char *hex, bin[100], *binptr = &bin[0];
-            memset(bin, 0, 100);
-
-            if ((hex = strdup(strrchr(token, ':') + 1)) == NULL) {
-                perror("strdup");
-                return NULL;
-            }
-
-            /* Hex is just too pretty, so we need URL-encoded binary :/ */
-            hex_to_binary(hex, binptr, 20);
-            CURL *curl = curl_easy_init();
-            if (curl) {
-                t->info_hash = curl_easy_escape(curl, binptr, strlen(binptr));
-                if (t->info_hash == NULL) {
-                    perror("curl_easy_unescape");
-                    return NULL;
-                }
-                curl_easy_cleanup(curl);
-            }
-
-            free(hex);
-            
-        } else if (!strncmp("dn", token, 2)) { /* Torrent name */
-            if ((t->filename = strdup(token + 3)) == NULL) {
-                perror("strdup");
-                return NULL;
-            }
-            
-        } else if (!strncmp("tr", token, 2)) { /* URLencoded tracker URL */
-            if ((curr = (tracker_t*)calloc(1, sizeof(tracker_t))) == NULL) {
-                perror("calloc");
-                return NULL;
-            }
-
-            /* Decode the URL */
-            CURL *curl  = curl_easy_init();
-            if (curl) {
-                curr->url = curl_easy_unescape(curl, token+3, strlen(token)-2, NULL);
-                if (curr->url == NULL) {
-                    perror("curl_easy_unescape");
-                    return NULL;
-                }
-                curl_easy_cleanup(curl);
-            }
-
-            /* Append to the announce linked list */
-            if (prev == NULL) {
-                t->trackers = curr;
-                prev = curr;
-            } else {
-                prev->next = curr;
-                prev = curr;
-            }
-        }
-        free(token);
-        magnet = div + 1;
-        if (div == NULL) break;
-    } 
-
-    if (t->info_hash == NULL) {
-        FATAL("Mangled magnet, failed to extract info hash\n");
-        return NULL;
-    }
-
-    if (t->trackers == NULL) {
-        FATAL("Mangled magnet, failed to extract trackers\n");
-        return NULL;
-    }
-
-    if (t->filename == NULL) {
-        FATAL("Mangled magnet, failed to extract filename\n");
-        return NULL;
-    }
-
-    return t;
-}
 
 int
 main(int argc, char *argv[])
@@ -252,7 +57,7 @@ main(int argc, char *argv[])
     }
 
     /* Get information from the URL */
-    if ((t = parse_magnet(magnet)) == NULL) {
+    if ((t = magnet_parse_uri(magnet)) == NULL) {
         FATAL("Failed to parse magent link\n");
     }
 
@@ -267,7 +72,7 @@ main(int argc, char *argv[])
     t->event   = "started";
 
     /* Fill out the fields of the torrent struct with info from a tracker */
-    if (tracker_initial_request(t) < 0) {
+    if (magnet_request_tracker(t) < 0) {
         FATAL("Failed to get information from the tracker\n");
         return -1;
     }

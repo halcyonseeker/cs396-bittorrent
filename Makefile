@@ -7,11 +7,11 @@ GFLAGS = -fprofile-arcs -ftest-coverage
 
 all: clean $(TARGET)
 
-bitclient:
-	$(CC) $(CFLAGS) $(GFLAGS) -o $(TARGET) bitclient.c bencode/bencode.o
+bitclient: magnet
+	$(CC) $(CFLAGS) $(GFLAGS) -o $(TARGET) bitclient.c bencode/bencode.o magnet.o
 
-# extract:
-# 	$(CC) $(CFLAGS) $(GFLAGS) -o extract.o -c extract.c
+magnet:
+	$(CC) $(CFLAGS) $(GFLAGS) -o magnet.o -c magnet.c
 
 # tracker:
 # 	$(CC) $(CFLAGS) $(GFLAGS) -o tracker.o -c tracker.c
