@@ -15,11 +15,6 @@
 
 #include "bitclient.h"
 #include "magnet.h"
-/* #include "extract.h" */
-/* #include "tracker.h" */
-
-#include "bencode/list.h"
-#include "bencode/bencode.h"
 
 int log_verbosely = 0;
 
