@@ -275,44 +275,45 @@ main(int argc, char *argv[])
         for (chunk_t *c = t->pieces; c->next != NULL; c = c->next)
             printf("\t\t%lli\t%s\n", c->num, c->checksum);
     }
-    /* printf("\tpiece_len = %lli\n", t->piece_len); */
-    /* printf("\tfile_len  = %lli\n", t->file_len); */
-    /* printf("\tport      = %s\n", t->port); */
-    /* printf("\tevent     = %s\n", t->event); */
-    /* printf("\tuploaded  = %lli\n", t->uploaded); */
-    /* printf("\tdloaded   = %lli\n", t->dloaded); */
-    /* printf("\tleft      = %lli\n", t->left); */
+    printf("\tpiece_len = %lli\n", t->piece_len);
+    printf("\tfile_len  = %lli\n", t->file_len);
+    printf("\tport      = %s\n", t->port);
+    printf("\tevent     = %s\n", t->event);
+    printf("\tuploaded  = %lli\n", t->uploaded);
+    printf("\tdloaded   = %lli\n", t->dloaded);
+    printf("\tleft      = %lli\n", t->left);
 
     /* Now we can start a seeder and a leacher thread :3 */
 
     /* Free the torrent */
-    free(t->info_hash);
+    curl_free(t->info_hash);
     free(t->filename);
     if (t->trackers != NULL) {
         tracker_t *t_save;
         for (tracker_t *tp = t->trackers; tp != NULL; tp = t_save) {
             curl_free(tp->url);
             t_save = tp->next;
+            free(tp);
         }
     }
     if (t->peers != NULL) {
-        peers_t *  p_save;
+        peers_t *p_save;
         for (peers_t *pp = t->peers; pp != NULL; pp = p_save) {
             free(pp->id);
             free(pp->ip);
             free(pp->port);
             p_save = pp->next;
+            free(pp);
         }
     }
     if (t->pieces != NULL) {
-        chunk_t *  c_save;
+        chunk_t *c_save;
         for (chunk_t *cp = t->pieces; cp != NULL; cp = c_save) {
             free(cp->checksum);
             c_save = cp->next;
+            free(cp);
         }
     }
-    free(t->port);
-    free(t->event);
     free(t);
 
     return 0;
