@@ -32,7 +32,7 @@ Usage: bitclient [-vh] magnet:\n\
 
 /**
  * Base conversion is fiddly and error-prone so I borrowed this from here:
- * https://github.com/transmission/transmission/blob/master/libtransmission/utils.c#L815
+ * github.com/transmission/transmission/blob/master/libtransmission/utils.c#L815
  */
 void
 hex_to_binary(void const* vinput, void* voutput, size_t byte_length)
@@ -66,38 +66,37 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
 int
 tracker_initial_request(torrent_t *t)
 {
-    CURL *curl = NULL;
     char *body = NULL;
-    char url[1024];
 
     if (t == NULL) return -1;
-
-    /* Allocate a buffer to store curl's response */
-    if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE, sizeof(char))) == NULL) {
-        perror("calloc");
-        return -1;
-    }
-
-
     /* Try each of the announce urls until one works */
-    for (tracker_t *a = t->trackers; a->next != NULL; a = a->next) {
-        memset(url, 0, 1024);
-        sprintf(url, "%s?info_hash=%s&peer_id=%sport=%s",
-                a->url, t->info_hash, t->peer_id, t->port);
-
-        /* Handle udp and http(s) trackers differently */
+    for (tracker_t *a = t->trackers; a != NULL; a = a->next) {
         if (!strncmp(a->url, "udp", 3)) {
-            /* We're at the end of the list and haven't seen a http tracker */
-            if (a->next->next == NULL) {
-                FATAL("Sorry, we don't support UDP trackers yet\n");
+            /* TODO implement timeouts and retries as per the spec */
+            /* body = udp_initial_request(t, a->url); */
+            break;
+
+        } else if (!strncmp(a->url, "http", 4)) {
+            CURLcode err;
+            CURL *curl = NULL;
+            char url[1024];
+
+            /* Allocate a buffer to store curl's response */
+            if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE, sizeof(char))) == NULL) {
+                perror("calloc");
                 return -1;
             }
-        } else if (!strncmp(a->url, "http", 4)) {
+
+            /* Create a tracker API url */
+            memset(url, 0, 1024);
+            sprintf(url, "%s?info_hash=%s&peer_id=%sport=%s",
+                    a->url, t->info_hash, t->peer_id, t->port);
+
             if ((curl = curl_easy_init()) != NULL) {
                 curl_easy_setopt(curl, CURLOPT_URL, url);
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)body);
-                CURLcode err = curl_easy_perform(curl);
+                err = curl_easy_perform(curl);
                 if (err) {
                     FATAL("CURL failed to reach tracker API: %s\n",
                           curl_easy_strerror(err));
