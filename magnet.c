@@ -258,8 +258,6 @@ magnet_request_tracker(torrent_t *t)
             sprintf(url, "%s?info_hash=%s&peer_id=%sport=%s&event=%s",
                     a->url, t->info_hash, t->peer_id, t->port, t->event);
 
-            DEBUG("API URL: %s\n", url);
-
             if ((curl = curl_easy_init()) != NULL) {
                 curl_easy_setopt(curl, CURLOPT_URL, url);
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
@@ -267,7 +265,7 @@ magnet_request_tracker(torrent_t *t)
                 curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
                 err = curl_easy_perform(curl);
                 if (err == CURLE_OPERATION_TIMEDOUT) {
-                    fprintf(stderr, "CURL: %s\n", curl_easy_strerror(err));
+                    fprintf(stderr, "CURL timed out for %s\n", a->url);
                     continue;
                 }
                 if (err) {
@@ -298,7 +296,7 @@ magnet_request_tracker(torrent_t *t)
 }
 
 /**
- * Take a magnet link, and parse its contents into the torrent structure
+ * Take a magnet link and parse its contents into the torrent structure
  */
 torrent_t *
 magnet_parse_uri(char *magnet)
