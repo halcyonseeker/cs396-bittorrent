@@ -131,10 +131,23 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    /* In order for the seeder and leacher to work, T must be full */
+    /* In order for the seeder and leecher to work, T must be full */
     if (log_verbosely) print_torrent(t);
 
-    /* Now we can start a seeder and a leacher thread :3 */
+    /* Now we can start a seeder and a leecher thread :3 */
+    pthread_t threads[2];
+
+    if ((pthread_create(&threads[0], NULL, leecher_tmain, t) != 0) ||
+        (pthread_create(&threads[1], NULL, seeder_tmain, t) != 0)) {
+        perror("pthread_create");
+        return -1;
+    }
+
+    if ((pthread_join(threads[0], NULL) != 0) ||
+        (pthread_join(threads[1], NULL) != 0)) {
+        perror("thread_join");
+        return -1;
+    }
 
     free_torrent(t);
 
