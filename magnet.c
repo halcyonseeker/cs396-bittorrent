@@ -113,33 +113,35 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
  * www.beej.us/guide/bgnet/html/index-wide.html#datagram
  */
 static char *
-udp_initial_request(torrent_t *t, char *url)
+udp_request(torrent_t *t, char *url, char *pkt)
 {
-    int sock, rv;
-    char *pack = NULL;
-    char *host = NULL;
-    struct addrinfo hints, *servinfo, *p;
-
     char *body = NULL;
+    
+    int sock, rv;
+    struct addrinfo hints, *servinfo, *p;
     struct sockaddr_storage their_addr;
     socklen_t addr_len;
 
-    /* Send a packet */
-
+    /* Initial network setup */
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;    /* IP version agnostic */
     hints.ai_socktype = SOCK_DGRAM; /* UDP socket */
 
+    /* Get information about connections */
     char *tmp = strdup(url+6);
-    host = strndup(tmp, (size_t)(strchr(tmp, ':') - tmp));
+    char *host = strndup(tmp, (size_t)(strchr(tmp, ':') - tmp));
     free(tmp);
     if ((rv = getaddrinfo(host, t->port, &hints, &servinfo)) != 0) {
-        FATAL("getaddrinfo: %s\n", gai_strerror(rv)); /* EAI_NONAME */
+        FATAL("getaddrinfo: %s\n", gai_strerror(rv));
         DEBUG("URL: %s\n", url);
+        free(host);
+        free(tmp);
         return NULL;
     }
     free(host);
+    free(tmp);
 
+    /* Establish a socket */
     for (p = servinfo; p != NULL; p = p->ai_next) {
         if ((sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
             perror("socket");
@@ -147,19 +149,24 @@ udp_initial_request(torrent_t *t, char *url)
         }
         break;
     }
-
     if (p == NULL) {
         FATAL("Failed to create a UDP socket\n");
         return NULL;
     }
 
-    if ((pack = build_udp_packet(t, url)) == NULL) {
-        FATAL("Failed to build UDP packet\n");
+    /* Allocate an over-sized buffer for the tracker's response */
+    if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE + 1, sizeof(char))) == NULL) {
+        perror("calloc");
         return NULL;
     }
 
-    if (sendto(sock, pack, strlen(pack), 0, p->ai_addr, p->ai_addrlen) == -1) {
-        perror("sendto");
+    /* Set a timeout for the socket */
+    int n = 0;
+    struct timeval timeout;
+    timeout.tv_sec = 15;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
+                   sizeof(timeout)) < 9) {
+        perror("setsockopt");
         return NULL;
     }
 
@@ -201,14 +208,16 @@ udp_initial_request(torrent_t *t, char *url)
         }
     }
 
-    if (recvfrom(sock, body, CURL_MAX_WRITE_SIZE, 0,
-                 (struct sockaddr *)&their_addr, &addr_len)) {
-        perror("recvfrom");
+    /* Resize the body buffer */
+    if ((body = (char*)reallocarray(body, bytes, sizeof(char))) == NULL) {
+        perror("reallocarray");
         return NULL;
     }
-    *(body + CURL_MAX_WRITE_SIZE + 1) = '\0';
 
+    close(sock);
+    free(pack);
     freeaddrinfo(servinfo);
+
     return body;
 }
 
