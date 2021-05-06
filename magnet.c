@@ -199,8 +199,8 @@ udp_request(torrent_t *t, char *url, char *pkt)
     int n = 0;
     struct timeval timeout;
     timeout.tv_sec = 15;
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
-                   sizeof(timeout)) < 9) {
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&timeout,
+                   sizeof(timeout)) < 0) {
         perror("setsockopt");
         return NULL;
     }
@@ -222,8 +222,8 @@ udp_request(torrent_t *t, char *url, char *pkt)
         if (bytes == 0) {
             if (n < 8) {
                 timeout.tv_sec = 15 * (int)pow(2, n);
-                if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
-                               sizeof(timeout)) < 9) {
+                if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&timeout,
+                               sizeof(timeout)) < 0) {
                     perror("setsockopt");
                     return NULL;
                 }
