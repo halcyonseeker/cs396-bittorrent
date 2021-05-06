@@ -3,6 +3,7 @@
  * structure from a magnet URI passed on the command line.
  */
 
+#include <errno.h>
 #include <endian.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -239,13 +240,15 @@ udp_request(torrent_t *t, char *url, char *pkt)
         return NULL;
     }
 
-    /* Set a timeout for the socket */
+    /* Set up a timeout */
     int n = 0;
-    struct timeval timeout;
-    timeout.tv_sec = 15;
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&timeout,
-                   sizeof(timeout)) < 0) {
+    struct timeval tv;
+    tv.tv_sec = 15;
+    tv.tv_usec = 0;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
         perror("setsockopt");
+        freeaddrinfo(servinfo);
+        close(sock);
         return NULL;
     }
 
@@ -263,25 +266,26 @@ udp_request(torrent_t *t, char *url, char *pkt)
                          (struct sockaddr *)&their_addr, &addr_len);
 
         /* If we've timeout out before, increase the timeout and try again */
-        if (bytes == 0) {
+        if (errno == EWOULDBLOCK || body == 0) {   /* The socket timed out */
             if (n < 8) {
-                timeout.tv_sec = 15 * (int)pow(2, n);
-                if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&timeout,
-                               sizeof(timeout)) < 0) {
+                DEBUG("UDP connection to %s timed out, retrying\n", url);
+                tv.tv_sec = 15 * (int)pow(2, n);
+                if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
                     perror("setsockopt");
+                    freeaddrinfo(servinfo);
+                    close(sock);
                     return NULL;
                 }
+                n++;
+                continue;
             } else {
-                fprintf(stderr, "UDP connection to %s timed out\n", url);
+                DEBUG("UDP timeout to %s exceeded the max threshold\n", url);
                 close(sock);
-                free(pkt);
                 freeaddrinfo(servinfo);
                 return NULL;
             }
-            n++;
-        } else {
-            break;
         }
+        break;
     }
 
     /* Resize the body buffer */
