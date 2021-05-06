@@ -59,4 +59,7 @@ typedef struct torrent {
     be_num_t   uploaded;  /* Bytes we've uploaded */
     be_num_t   dloaded;   /* Bytes we've downloaded */
     be_num_t   left;      /* Bytes we still need */
+    /* Required for UDP trackers */
+    uint32_t   trans_id;  /* Our unique 32-bit ID, big endian */
+    uint32_t   conn_id;   /* An announce session ID, big endian */
 } torrent_t;
