@@ -163,16 +163,42 @@ udp_initial_request(torrent_t *t, char *url)
         return NULL;
     }
 
-    close(sock);
-    free(pack);
+    /* Loop forever until we receive a good response */
+    size_t bytes;
+    while (1) {
+        /* Send the packet */
+        if (sendto(sock, pack, strlen(pack), 0, p->ai_addr, p->ai_addrlen) == -1) {
+            perror("sendto");
+            return NULL;
+        }
 
-    /* Recieve a response */
-    /* TODO: setup? */
-    hints.ai_flags = AI_PASSIVE; /* use my IP */
+        /* Recieve a response */
+        if ((bytes = recvfrom(sock, body, CURL_MAX_WRITE_SIZE, 0,
+                              (struct sockaddr *)&their_addr, &addr_len)) < 0) {
+            perror("recvfrom");
+            return NULL;
+        }
 
-    if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE + 1, sizeof(char))) == NULL) {
-        perror("calloc");
-        return NULL;
+        /* If we've timeout out before, increase the timeout and try again */
+        if (bytes == 0) {
+            if (n < 8) {
+                timeout.tv_sec = 15 * (int)pow(2, n);
+                if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout,
+                               sizeof(timeout)) < 9) {
+                    perror("setsockopt");
+                    return NULL;
+                }
+            } else {
+                fprintf(stderr, "UDP connection to %s timed out\n", url);
+                close(sock);
+                free(pack);
+                freeaddrinfo(servinfo);
+                return NULL;
+            }
+            n++;
+        } else {
+            break;
+        }
     }
 
     if (recvfrom(sock, body, CURL_MAX_WRITE_SIZE, 0,
