@@ -3,6 +3,7 @@
  * structure from a magnet URI passed on the command line.
  */
 
+#include <endian.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -57,18 +58,53 @@ hex_to_binary(void const* vinput, void* voutput, size_t byte_length)
  * Take the url of the host we're contacting and a torrent structure, return
  * a successfully crafted packet or NULL on error
  */
-static char *
-udp_gen_conn_pkt(torrent_t *t, char *url)
+static uint8_t *
+udp_gen_conn_pkt(torrent_t *t)
 {
-    if (t == NULL) return NULL;
-    return url;
+    uint64_t magic_number   = htobe64(0x41727101980);
+    uint32_t transaction_id = htobe32(3141592653);
+    uint8_t *packet = (uint8_t*)malloc(17);
+    memset(packet, 0, 17);
+
+    if (packet == NULL) {
+        perror("malloc");
+        return NULL;
+    }
+
+    *packet        = (uint8_t)(magic_number >> 56);
+    *(packet + 1)  = (uint8_t)((magic_number << 8) >> 56);
+    *(packet + 2)  = (uint8_t)((magic_number << 16) >> 56);
+    *(packet + 3)  = (uint8_t)((magic_number << 24) >> 56);
+    *(packet + 4)  = (uint8_t)((magic_number << 32) >> 56);
+    *(packet + 5)  = (uint8_t)((magic_number << 40) >> 56);
+    *(packet + 6)  = (uint8_t)((magic_number << 48) >> 56);
+    *(packet + 7)  = (uint8_t)((magic_number << 56) >> 56);
+    *(packet + 8)  = 0;
+    *(packet + 9)  = 0;
+    *(packet + 10) = 0;
+    *(packet + 11) = 0;
+    *(packet + 12) = (uint8_t)(transaction_id >> 24);
+    *(packet + 13) = (uint8_t)((transaction_id << 8) >> 24);
+    *(packet + 14) = (uint8_t)((transaction_id << 16) >> 24);
+    *(packet + 15) = (uint8_t)((transaction_id << 24) >> 24);
+
+    t->trans_id = transaction_id;
+    
+    return packet;
 }
 
-static char *
-udp_gen_annc_pkt(torrent_t *t, char *url)
+static uint8_t *
+udp_gen_annc_pkt(torrent_t *t)
 {
+    /* uint64_t connection_id = t->conn_id; */
+    /* uint32_t transaction_id = t->trans_id; */
+    /* etc */
+    uint8_t *packet = (uint8_t*)malloc(99);
+    memset(packet, 0, 99);
+
     if (t == NULL) return NULL;
-    return url;
+
+    return packet;
 }
 
 /**
@@ -333,16 +369,16 @@ magnet_request_tracker(torrent_t *t)
     /* Try each of the announce urls until one works */
     for (tracker_t *a = t->trackers; a != NULL; a = a->next) {
         if (!strncmp(a->url, "udp", 3)) {
-            char *connect_pkt, *announce_pkt;
+            uint8_t *connect_pkt, *announce_pkt;
 
             /* Generate the handshake packet */
-            if ((connect_pkt = udp_gen_conn_pkt(t, a->url)) == NULL) {
+            if ((connect_pkt = udp_gen_conn_pkt(t)) == NULL) {
                 FATAL("Failed to generate the connection UDP packet\n");
                 return -1;
             }
 
             /* Send and parse the intial handshake */
-            if ((body = udp_request(t, a->url, connect_pkt)) == NULL) {
+            if ((body = udp_request(t, a->url, (char*)connect_pkt)) == NULL) {
                 free(connect_pkt);
                 continue;
             }
@@ -355,13 +391,13 @@ magnet_request_tracker(torrent_t *t)
             free(body);
 
             /* Generate the announce packet */
-            if ((announce_pkt = udp_gen_annc_pkt(t, a->url)) == NULL) {
+            if ((announce_pkt = udp_gen_annc_pkt(t)) == NULL) {
                 FATAL("Failed to generate the announce UDP packet\n");
                 return -1;
             }
 
             /* Send the announce and parse the response into T */
-            if ((body = udp_request(t, a->url, announce_pkt)) == NULL) {
+            if ((body = udp_request(t, a->url, (char*)announce_pkt)) == NULL) {
                 free(announce_pkt);
                 continue;
             }
