@@ -100,14 +100,54 @@ udp_gen_conn_pkt(torrent_t *t)
 static uint8_t *
 udp_gen_annc_pkt(torrent_t *t)
 {
-    /* uint64_t connection_id = t->conn_id; */
-    /* uint32_t transaction_id = t->trans_id; */
-    /* etc */
+    uint64_t connection_id  = t->conn_id;           /* Set in udp_gen_annc_pkt */
+    uint32_t action         = htobe32(1);
+    uint32_t transaction_id = t->trans_id;          /* Same as above */
+    /* char *   info_hash      = NULL; */
+    /* char *   peer_id        = NULL; */
+    /* uint64_t downloaded     = htobe64((uint64_t)t->dloaded); */
+    /* uint64_t left           = htobe64((uint65_t)t->left); */
+    /* uint64_t uploaded       = htobe64((uint64_t)t->uploaded); */
+    /* uint64_t event          = 0; */
     uint8_t *packet = (uint8_t*)malloc(99);
     memset(packet, 0, 99);
 
-    if (t == NULL) return NULL;
+    if (packet == NULL) {
+        perror("malloc");
+        return NULL;
+    }
 
+    /* WARNING:
+    * Because of timeout issues in udo_request, I have no idea if this packet
+    * is actually valid. */
+
+    /* Copy info_hash and peer_id into big endian buffers */
+
+    /* Set the event based on the current event */
+    /* if      (!strcmp(t->event, "completed")) event = 1; */
+    /* else if (!strcmp(t->event, "started"))   event = 2; */
+    /* else if (!strcmp(t->event, "stopped"))   event = 3; */
+
+    *packet        = (uint8_t)(connection_id >> 56);
+    *(packet + 1)  = (uint8_t)((connection_id << 8) >> 56);
+    *(packet + 2)  = (uint8_t)((connection_id << 16) >> 56);
+    *(packet + 3)  = (uint8_t)((connection_id << 24) >> 56);
+    *(packet + 4)  = (uint8_t)((connection_id << 32) >> 56);
+    *(packet + 5)  = (uint8_t)((connection_id << 40) >> 56);
+    *(packet + 6)  = (uint8_t)((connection_id << 48) >> 56);
+    *(packet + 7)  = (uint8_t)((connection_id << 56) >> 56);
+    *(packet + 8)  = 0;
+    *(packet + 9)  = 0;
+    *(packet + 10) = 0;
+    *(packet + 11) = (uint8_t)action;
+    *(packet + 12) = (uint8_t)(transaction_id >> 24);
+    *(packet + 13) = (uint8_t)((transaction_id << 8) >> 24);
+    *(packet + 14) = (uint8_t)((transaction_id << 16) >> 24);
+    *(packet + 15) = (uint8_t)((transaction_id << 24) >> 24);
+    /* Etc */
+
+    /* free(info_hash); */
+    /* free(peer_id); */
     return packet;
 }
 
