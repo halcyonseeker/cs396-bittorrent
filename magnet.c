@@ -166,7 +166,6 @@ udp_request(torrent_t *t, char *url, char *pkt)
     /* Get information about connections */
     char *tmp = strdup(url+6);
     char *host = strndup(tmp, (size_t)(strchr(tmp, ':') - tmp));
-    free(tmp);
     if ((rv = getaddrinfo(host, t->port, &hints, &servinfo)) != 0) {
         FATAL("getaddrinfo: %s\n", gai_strerror(rv));
         DEBUG("URL: %s\n", url);
