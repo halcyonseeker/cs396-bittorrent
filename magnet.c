@@ -48,28 +48,24 @@ hex_to_binary(void const* vinput, void* voutput, size_t byte_length)
 }
 
 /**
- * Craft a UDP packet to send to the tracker as per bep 15:
+ * These functions craft a UDP packet to send to the tracker as per bep 15:
  * www.bittorrent.org/beps/bep_0015.html
+ * The first creates a connection (handshake) packet and the second creates
+ * a packet to request peer information.
  * Take the url of the host we're contacting and a torrent structure, return
  * a successfully crafted packet or NULL on error
  */
 static char *
-build_udp_packet(torrent_t *t, char *url)
+udp_gen_conn_pkt(torrent_t *t, char *url)
 {
-    char *pack = NULL;
-
-    if (t == NULL || url == NULL) return NULL;
-    
-    if ((pack = (char*)malloc(512)) == NULL) {
-        perror("malloc");
-        return NULL;
-    }
-    memset(pack, 0, 512);
-
-    /* TODO */
-
-    return pack;
 }
+
+static char *
+udp_gen_annc_pkt(torrent_t *t, char *url)
+{
+}
+
+
 
 /**
  * See CURLOPT_WRITEFUNCTION(3)
