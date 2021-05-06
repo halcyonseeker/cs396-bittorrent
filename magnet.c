@@ -60,13 +60,35 @@ hex_to_binary(void const* vinput, void* voutput, size_t byte_length)
 static char *
 udp_gen_conn_pkt(torrent_t *t, char *url)
 {
+    if (t == NULL) return -1;
+    return url;
 }
 
 static char *
 udp_gen_annc_pkt(torrent_t *t, char *url)
 {
+    if (t == NULL) return -1;
+    return url;
 }
 
+/**
+ * Parse a UDP tracker's response or the connect and announce sorts, 
+ * respectively. The announce function fills in the torrent structure.
+ */
+int
+udp_parse_connect(char *body)
+{
+    DEBUG("udp_parse_connect: body: %s\n", body);
+    return 0;
+}
+
+int
+udp_parse_announce(torrent_t *t, char *body)
+{
+    if (t == NULL) return -1;
+    DEBUG("udp_parse_announce: body: %s\n", body);
+    return 0;
+}
 
 
 /**
