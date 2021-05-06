@@ -451,7 +451,7 @@ magnet_request_tracker(torrent_t *t)
     }
 
     DEBUG("BODY: (%s)\n", body);
-    if (*body == '\0') {
+    if (body == NULL) {
         FATAL("None of the trackers responded :(\n");
         return -1;
     }
