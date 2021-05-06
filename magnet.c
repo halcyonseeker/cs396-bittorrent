@@ -71,6 +71,10 @@ udp_gen_conn_pkt(torrent_t *t)
         return NULL;
     }
 
+    /* WARNING:
+    * Because of timeout issues in udo_request, I have no idea if this packet
+    * is actually valid. */
+
     *packet        = (uint8_t)(magic_number >> 56);
     *(packet + 1)  = (uint8_t)((magic_number << 8) >> 56);
     *(packet + 2)  = (uint8_t)((magic_number << 16) >> 56);
