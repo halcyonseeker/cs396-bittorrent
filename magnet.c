@@ -297,7 +297,6 @@ udp_request(torrent_t *t, char *url, char *pkt)
     *end = '\0';
 
     close(sock);
-    free(pkt);
     freeaddrinfo(servinfo);
 
     return body;
@@ -457,6 +456,8 @@ magnet_request_tracker(torrent_t *t)
                 continue;
             }
             
+            free(connect_pkt);
+            free(announce_pkt);
             free(body);
             break;
 
