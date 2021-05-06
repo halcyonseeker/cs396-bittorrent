@@ -1,5 +1,5 @@
 CC     = gcc
-CFLAGS = -Wall -Wextra -Werror -Wpedantic -pthread -lcurl -lcrypto
+CFLAGS = -Wall -Wextra -Werror -Wpedantic -pthread -lcurl -lcrypto -lm
 TARGET = bitclient
 
 # Required to link against the bencode library

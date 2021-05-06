@@ -60,14 +60,14 @@ hex_to_binary(void const* vinput, void* voutput, size_t byte_length)
 static char *
 udp_gen_conn_pkt(torrent_t *t, char *url)
 {
-    if (t == NULL) return -1;
+    if (t == NULL) return NULL;
     return url;
 }
 
 static char *
 udp_gen_annc_pkt(torrent_t *t, char *url)
 {
-    if (t == NULL) return -1;
+    if (t == NULL) return NULL;
     return url;
 }
 
@@ -174,17 +174,14 @@ udp_request(torrent_t *t, char *url, char *pkt)
     size_t bytes;
     while (1) {
         /* Send the packet */
-        if (sendto(sock, pack, strlen(pack), 0, p->ai_addr, p->ai_addrlen) == -1) {
+        if (sendto(sock, pkt, strlen(pkt), 0, p->ai_addr, p->ai_addrlen) == -1) {
             perror("sendto");
             return NULL;
         }
 
         /* Recieve a response */
-        if ((bytes = recvfrom(sock, body, CURL_MAX_WRITE_SIZE, 0,
-                              (struct sockaddr *)&their_addr, &addr_len)) < 0) {
-            perror("recvfrom");
-            return NULL;
-        }
+        bytes = recvfrom(sock, body, CURL_MAX_WRITE_SIZE, 0,
+                         (struct sockaddr *)&their_addr, &addr_len);
 
         /* If we've timeout out before, increase the timeout and try again */
         if (bytes == 0) {
@@ -198,7 +195,7 @@ udp_request(torrent_t *t, char *url, char *pkt)
             } else {
                 fprintf(stderr, "UDP connection to %s timed out\n", url);
                 close(sock);
-                free(pack);
+                free(pkt);
                 freeaddrinfo(servinfo);
                 return NULL;
             }
@@ -215,7 +212,7 @@ udp_request(torrent_t *t, char *url, char *pkt)
     }
 
     close(sock);
-    free(pack);
+    free(pkt);
     freeaddrinfo(servinfo);
 
     return body;
