@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <curl/curl.h>
+#include <time.h>
+#include <math.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
