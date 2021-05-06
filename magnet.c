@@ -277,9 +277,47 @@ magnet_request_tracker(torrent_t *t)
     /* Try each of the announce urls until one works */
     for (tracker_t *a = t->trackers; a != NULL; a = a->next) {
         if (!strncmp(a->url, "udp", 3)) {
-            /* TODO implement timeouts and retries as per the spec */
-            body = udp_initial_request(t, a->url);
-            continue;
+            char *connect_pkt, *announce_pkt;
+
+            /* Generate the handshake packet */
+            if ((connect_pkt = udp_gen_conn_pkt(t, a->url)) == NULL) {
+                FATAL("Failed to generate the connection UDP packet\n");
+                return -1;
+            }
+
+            /* Send and parse the intial handshake */
+            if ((body = udp_request(t, a->url, connect_pkt)) == NULL) {
+                free(connect_pkt);
+                continue;
+            }
+            free(connect_pkt);
+            if (udp_parse_connect(body) < 0) {
+                free(body);
+                free(connect_pkt);
+                continue;
+            }
+            free(body);
+
+            /* Generate the announce packet */
+            if ((announce_pkt = udp_gen_annc_pkt(t, a->url)) == NULL) {
+                FATAL("Failed to generate the announce UDP packet\n");
+                return -1;
+            }
+
+            /* Send the announce and parse the response into T */
+            if ((body = udp_request(t, a->url, announce_pkt)) == NULL) {
+                free(announce_pkt);
+                continue;
+            }
+            free(announce_pkt);
+            if (udp_parse_announce(t, body) < 0) {
+                free(announce_pkt);
+                free(body);
+                continue;
+            }
+            
+            free(body);
+            break;
 
         } else if (!strncmp(a->url, "http", 4)) {
             CURLcode err;
