@@ -241,10 +241,12 @@ udp_request(torrent_t *t, char *url, char *pkt)
     }
 
     /* Resize the body buffer */
-    if ((body = (char*)reallocarray(body, bytes, sizeof(char))) == NULL) {
+    if ((body = (char*)reallocarray(body, bytes + 1, sizeof(char))) == NULL) {
         perror("reallocarray");
         return NULL;
     }
+    char *end = body + bytes + 1;
+    *end = '\0';
 
     close(sock);
     free(pkt);
