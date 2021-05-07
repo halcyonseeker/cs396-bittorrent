@@ -160,14 +160,16 @@ udp_gen_annc_pkt(torrent_t *t)
     uint64_t connection_id  = t->conn_id;           /* Set in udp_gen_annc_pkt */
     uint32_t action         = htobe32(1);
     uint32_t transaction_id = t->trans_id;          /* Same as above */
-    /* char *   info_hash      = NULL; */
-    /* char *   peer_id        = NULL; */
-    /* uint64_t downloaded     = htobe64((uint64_t)t->dloaded); */
-    /* uint64_t left           = htobe64((uint65_t)t->left); */
-    /* uint64_t uploaded       = htobe64((uint64_t)t->uploaded); */
-    /* uint64_t event          = 0; */
-    uint8_t *packet = (uint8_t*)malloc(99);
-    memset(packet, 0, 99);
+    char     info_hash[21];
+    char     peer_id[21];
+    uint64_t downloaded     = htobe64((uint64_t)t->dloaded);
+    uint64_t left           = htobe64((uint64_t)t->left);
+    uint64_t uploaded       = htobe64((uint64_t)t->uploaded);
+    uint32_t event          = 0;
+    uint8_t *packet = (uint8_t*)malloc(84);
+    memset(&info_hash, 0, 20);
+    memset(&peer_id, 0, 20);
+    memset(packet, 0, 84);
 
     if (packet == NULL) {
         perror("malloc");
@@ -179,11 +181,13 @@ udp_gen_annc_pkt(torrent_t *t)
     * is actually valid. */
 
     /* Copy info_hash and peer_id into big endian buffers */
+    for (size_t i = 0; i < 20; i++) info_hash[i] = (char)htobe32(*(t->info_hash + i));
+    for (size_t i = 0; i < 20; i++) peer_id[i] = (char)htobe32(*(t->peer_id + i));
 
     /* Set the event based on the current event */
-    /* if      (!strcmp(t->event, "completed")) event = 1; */
-    /* else if (!strcmp(t->event, "started"))   event = 2; */
-    /* else if (!strcmp(t->event, "stopped"))   event = 3; */
+    if      (!strcmp(t->event, "completed")) event = htobe32(1);
+    else if (!strcmp(t->event, "started"))   event = htobe32(2);
+    else if (!strcmp(t->event, "stopped"))   event = htobe32(3);
 
     *packet        = (uint8_t)(connection_id >> 56);
     *(packet + 1)  = (uint8_t)((connection_id << 8) >> 56);
@@ -201,10 +205,74 @@ udp_gen_annc_pkt(torrent_t *t)
     *(packet + 13) = (uint8_t)((transaction_id << 8) >> 24);
     *(packet + 14) = (uint8_t)((transaction_id << 16) >> 24);
     *(packet + 15) = (uint8_t)((transaction_id << 24) >> 24);
-    /* Etc */
+    for (int i = 0, p = 16; i < 20; i++, p++) *(packet + p) = (uint8_t)info_hash[i];
+    for (int i = 0, p = 36; i < 20; i++, p++) *(packet + p) = (uint8_t)peer_id[i];
+    *(packet + 56) = (uint8_t)(downloaded >> 56);
+    *(packet + 57) = (uint8_t)((downloaded << 8) >> 56);
+    *(packet + 58) = (uint8_t)((downloaded << 16) >> 56);
+    *(packet + 59) = (uint8_t)((downloaded << 24) >> 56);
+    *(packet + 61) = (uint8_t)((downloaded << 32) >> 56);
+    *(packet + 62) = (uint8_t)((downloaded << 40) >> 56);
+    *(packet + 63) = (uint8_t)((downloaded << 48) >> 56);
+    *(packet + 63) = (uint8_t)((downloaded << 56) >> 56);
+    *(packet + 64) = (uint8_t)(left >> 56);
+    *(packet + 65) = (uint8_t)((left << 8) >> 56);
+    *(packet + 66) = (uint8_t)((left << 16) >> 56);
+    *(packet + 67) = (uint8_t)((left << 24) >> 56);
+    *(packet + 68) = (uint8_t)((left << 32) >> 56);
+    *(packet + 69) = (uint8_t)((left << 40) >> 56);
+    *(packet + 70) = (uint8_t)((left << 48) >> 56);
+    *(packet + 71) = (uint8_t)((left << 56) >> 56);
+    *(packet + 72) = (uint8_t)(uploaded >> 56);
+    *(packet + 73) = (uint8_t)((uploaded << 8) >> 56);
+    *(packet + 74) = (uint8_t)((uploaded << 16) >> 56);
+    *(packet + 75) = (uint8_t)((uploaded << 24) >> 56);
+    *(packet + 76) = (uint8_t)((uploaded << 32) >> 56);
+    *(packet + 77) = (uint8_t)((uploaded << 40) >> 56);
+    *(packet + 78) = (uint8_t)((uploaded << 48) >> 56);
+    *(packet + 79) = (uint8_t)((uploaded << 56) >> 56);
+    *(packet + 80) = (uint8_t)(event >> 24);
+    *(packet + 81) = (uint8_t)((event << 8) >> 24);
+    *(packet + 82) = (uint8_t)((event << 16) >> 24);
+    *(packet + 83) = (uint8_t)((event << 24) >> 24);
 
-    /* free(info_hash); */
-    /* free(peer_id); */
+    /* Print the packet as binary */
+    if (log_verbosely) {
+        char dbg_connid[65], dbg_action[33], dbg_transid[33], dbg_ihash[161],
+            dbg_pid[161], dbg_dloaded[65], dbg_left[65], dbg_uploaded[65],
+            dbg_event[33], dbg_packet[793], *ihash_ptr = &dbg_ihash[0],
+            *pid_ptr = &dbg_pid[0], *packet_ptr = &dbg_packet[0];
+
+        memset(dbg_connid, 0, 65);
+        memset(dbg_action, 0, 33);
+        memset(dbg_transid, 0, 33);
+        memset(dbg_ihash, 0, 161);
+        memset(dbg_pid, 0, 161);
+        memset(dbg_dloaded, 0, 65);
+        memset(dbg_left, 0, 65);
+        memset(dbg_uploaded, 0, 65);
+        memset(dbg_event, 0, 33);
+        memset(dbg_packet, 0, 793);
+
+        _itoa(connection_id, dbg_connid, 2);
+        _itoa(action, dbg_action, 2);
+        _itoa(transaction_id, dbg_transid, 2);
+        for (int i = 0; i < 21; i++) { _itoa(packet[i], ihash_ptr, 2); ihash_ptr++; }
+        for (int i = 0; i < 21; i++) { _itoa(packet[i], pid_ptr, 2); pid_ptr++; }
+        _itoa(downloaded, dbg_dloaded, 2);
+        _itoa(left, dbg_left, 2);
+        _itoa(uploaded, dbg_uploaded, 2);
+        _itoa(event, dbg_event, 2);
+        for (int i = 0; i < 84; i++) { _itoa(packet[i], packet_ptr, 2); packet_ptr++; }
+
+        printf("-- BEGIN PACKET --\n");
+        printf("%s%s%s%s%s%s%s%s%s%s\n", dbg_connid, dbg_action, dbg_transid,
+               dbg_ihash, dbg_pid, dbg_dloaded, dbg_left, dbg_uploaded,
+               dbg_event, dbg_packet);
+        printf("%s\n", dbg_packet);
+        printf("--- END PACKET ---\n");
+    }
+
     return packet;
 }
 
