@@ -210,8 +210,7 @@ udp_request(torrent_t *t, char *url, char *pkt, char *body)
     char *tmp = strdup(url+6);
     char *host = strndup(tmp, (size_t)(strchr(tmp, ':') - tmp));
     if ((rv = getaddrinfo(host, t->port, &hints, &servinfo)) != 0) {
-        FATAL("getaddrinfo: %s\n", gai_strerror(rv));
-        DEBUG("URL: %s\n", url);
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         free(host);
         free(tmp);
         return NULL;
@@ -489,7 +488,6 @@ magnet_request_tracker(torrent_t *t)
             break;
 
         } else if (!strncmp(a->url, "http", 4)) {
-            CURLcode err;
             CURL *curl = NULL;
             char url[1024];
 
@@ -504,19 +502,23 @@ magnet_request_tracker(torrent_t *t)
                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
                 curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)body);
                 curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
-                err = curl_easy_perform(curl);
-                if (err == CURLE_OPERATION_TIMEDOUT) {
-                    fprintf(stderr, "CURL timed out for %s\n", a->url);
-                    continue;
-                }
+                CURLcode err = curl_easy_perform(curl);
                 if (err) {
-                    FATAL("CURL failed to reach tracker API: %s\n",
-                          curl_easy_strerror(err));
-                    return -1;
+                    fprintf(stderr, "CURL failed to reach tracker %s: %s\n",
+                            a->url, curl_easy_strerror(err));
+                    curl_easy_cleanup(curl);
+                    continue;
+                } else {
+                    curl_easy_cleanup(curl);
+                    break;
                 }
-                curl_easy_cleanup(curl);
-                break;
+            } else {
+                FATAL("Failed to intialize curl\n");
             }
+        } else {
+            fprintf(stderr, "Url has unknown protocol scheme: %s\n", a->url);
+            free(body);
+            continue;
         }
     }
 
