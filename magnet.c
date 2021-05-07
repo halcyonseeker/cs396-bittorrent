@@ -377,6 +377,7 @@ udp_request(torrent_t *t, char *url, char *pkt, char *body)
         }
 
         /* Recieve a response */
+        addr_len = sizeof(their_addr);
         bytes = recvfrom(sock, body, CURL_MAX_WRITE_SIZE, 0,
                          (struct sockaddr *)&their_addr, &addr_len);
 
