@@ -194,10 +194,8 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
  * www.beej.us/guide/bgnet/html/index-wide.html#datagram
  */
 static char *
-udp_request(torrent_t *t, char *url, char *pkt)
+udp_request(torrent_t *t, char *url, char *pkt, char *body)
 {
-    char *body = NULL;
-    
     int sock, rv;
     struct addrinfo hints, *servinfo, *p;
     struct sockaddr_storage their_addr;
@@ -231,12 +229,6 @@ udp_request(torrent_t *t, char *url, char *pkt)
     }
     if (p == NULL) {
         FATAL("Failed to create a UDP socket\n");
-        return NULL;
-    }
-
-    /* Allocate an over-sized buffer for the tracker's response */
-    if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE + 1, sizeof(char))) == NULL) {
-        perror("calloc");
         return NULL;
     }
 
@@ -414,8 +406,18 @@ magnet_request_tracker(torrent_t *t)
     char *body = NULL;
 
     if (t == NULL) return -1;
+
+    /* Allocate a buffer to store curl's response */
+    if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE + 1, sizeof(char))) == NULL) {
+        perror("calloc");
+        return -1;
+    }
+
     /* Try each of the announce urls until one works */
     for (tracker_t *a = t->trackers; a != NULL; a = a->next) {
+        /* Make sure the body is properly zeroed */
+        memset(body, 0, CURL_MAX_WRITE_SIZE + 1);
+
         if (!strncmp(a->url, "udp", 3)) {
             uint8_t *connect_pkt, *announce_pkt;
 
@@ -426,17 +428,15 @@ magnet_request_tracker(torrent_t *t)
             }
 
             /* Send and parse the intial handshake */
-            if ((body = udp_request(t, a->url, (char*)connect_pkt)) == NULL) {
+            if (udp_request(t, a->url, (char*)connect_pkt, body) == NULL) {
                 free(connect_pkt);
                 continue;
             }
             free(connect_pkt);
             if (udp_parse_connect(body) < 0) {
-                free(body);
                 free(connect_pkt);
                 continue;
             }
-            free(body);
 
             /* Generate the announce packet */
             if ((announce_pkt = udp_gen_annc_pkt(t)) == NULL) {
@@ -445,32 +445,21 @@ magnet_request_tracker(torrent_t *t)
             }
 
             /* Send the announce and parse the response into T */
-            if ((body = udp_request(t, a->url, (char*)announce_pkt)) == NULL) {
+            if (udp_request(t, a->url, (char*)announce_pkt, body) == NULL) {
                 free(announce_pkt);
                 continue;
             }
             free(announce_pkt);
             if (udp_parse_announce(t, body) < 0) {
                 free(announce_pkt);
-                free(body);
                 continue;
             }
-            
-            free(connect_pkt);
-            free(announce_pkt);
-            free(body);
             break;
 
         } else if (!strncmp(a->url, "http", 4)) {
             CURLcode err;
             CURL *curl = NULL;
             char url[1024];
-
-            /* Allocate a buffer to store curl's response */
-            if ((body = (char*)calloc(CURL_MAX_WRITE_SIZE, sizeof(char))) == NULL) {
-                perror("calloc");
-                return -1;
-            }
 
             /* Create a tracker API url */
             memset(url, 0, 1024);
@@ -502,6 +491,9 @@ magnet_request_tracker(torrent_t *t)
     DEBUG("BODY: (%s)\n", body);
     if (body == NULL) {
         FATAL("None of the trackers responded :(\n");
+        return -1;
+    } else if (*body == '\0') {
+        FATAL("The trackers all responded with an empty request :(\n");
         return -1;
     }
 
