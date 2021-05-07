@@ -303,8 +303,8 @@ static int
 extract_tracker_bencode(torrent_t *t, char *body)
 {
     be_node_t *bencode = NULL;
-    be_dict_t *entry, *peer;
-    list_t *   top_pos, *top_tmp;
+    be_dict_t *entry;
+    list_t *   a_pos, *a_tmp;
     size_t     read;
 
     if (t == NULL || body == NULL) return -1;
@@ -321,8 +321,8 @@ extract_tracker_bencode(torrent_t *t, char *body)
     }
 
     /* Iterate over the dictionary using macros defined in bencode/list.h */
-    list_for_each_safe(top_pos, top_tmp, &bencode->x.dict_head) {
-        entry = list_entry(top_pos, be_dict_t, link);
+    list_for_each_safe(a_pos, a_tmp, &bencode->x.dict_head) {
+        entry = list_entry(a_pos, be_dict_t, link);
 
         /* TODO: there are other fields I should support */
         if (!strcmp(entry->key.buf, "failure reason")) {
@@ -341,48 +341,80 @@ extract_tracker_bencode(torrent_t *t, char *body)
             continue;
 
         } else if (!strcmp(entry->key.buf, "peers")) {
-            /* This is where we build the linked list of peers */
-            peers_t *curr, *prev;
-            list_t  *peer_pos, *peer_tmp;
+            if (entry->val->type == LIST) {
+                list_t *b_pos, *b_tmp;
+                be_node_t *plist;
+                peers_t *curr = NULL, *prev = NULL;
 
-            list_for_each_safe(peer_pos, peer_tmp, &entry->val->x.dict_head) {
-                peer = list_entry(peer_pos, be_dict_t, link);
+                list_for_each_safe(b_pos, b_tmp, &entry->val->x.list_head) {
+                    plist = list_entry(b_pos, be_node_t, link);
 
-                if ((curr = (peers_t*)calloc(1, sizeof(peers_t))) == NULL) {
-                    perror("calloc");
+                    if (plist->type == DICT) {
+                        list_t *c_pos, *c_tmp;
+                        be_dict_t *pdict;
+
+                        /* Allocate a node in the list */
+                        if ((curr = (peers_t*)calloc(1, sizeof(peers_t))) == NULL) {
+                            perror("calloc");
+                            return -1;
+                        }
+
+                        list_for_each_safe(c_pos, c_tmp, &plist->x.dict_head) {
+                            pdict = list_entry(c_pos, be_dict_t, link);
+
+                            if (!strcmp("peer id", pdict->key.buf)) {
+                                curr->id = strdup(pdict->val->x.str.buf);
+                                if (curr->id == NULL) {
+                                    perror("strdup");
+                                    return -1;
+                                }
+
+                            } else if (!strcmp("ip", pdict->key.buf)) {
+                                curr->ip = strdup(pdict->val->x.str.buf);
+                                if (curr->ip == NULL) {
+                                    perror("strdup");
+                                    return -1;
+                                }
+
+                            } else if (!strcmp("port", pdict->key.buf)) {
+                                char buf[20];
+                                memset(buf, 0, 20);
+                                sprintf(buf, "%lli", pdict->val->x.num);
+                                if ((curr->port = strdup(buf)) == NULL) {
+                                    perror("strdup");
+                                    return -1;
+                                }
+                            }
+                            be_dict_free(pdict);
+                        }
+                        /* Append this peer to the torrent's linked list */
+                        if (prev == NULL) {
+                            t->peers = curr;
+                            prev = curr;
+                        } else {
+                            prev->next = curr;
+                            prev = curr;
+                        }
+
+                    } else {
+                        fprintf(stderr, "Unknown plist type; enum value: %i\n",
+                              plist->type);
+                        return -1;
+                    }
+                }
+                be_free(plist);
+            } else {
+                if (entry->val->type == STR) {
+                    if (entry->val->x.str.len == 0) {
+                        FATAL("The tracker didn't send us any peers :(\n");
+                        return -1;
+                    }
+                } else {
+                    FATAL("Unknown entry type; enum value: %i\n",
+                          entry->val->type);
                     return -1;
                 }
-
-                /* SEGFAULT because apparently peer->key.buf = 0x3 ???????? */
-                if (!strcmp("peer id", peer->key.buf)) {
-                    if ((curr->id = strdup(peer->val->x.str.buf)) == NULL) {
-                        perror("strdup");
-                        return -1;
-                    }
-
-                } else if (!strcmp("ip", peer->key.buf)) {
-                    if ((curr->ip = strdup(peer->val->x.str.buf)) == NULL) {
-                        perror("strdup");
-                        return -1;
-                    }
-
-                } else if (!strcmp("port", peer->key.buf)) {
-                    if ((curr->port = strdup(peer->val->x.str.buf)) == NULL) {
-                        perror("strdup");
-                        return -1;
-                    }
-                }
-                /* Append this peer to the torrent structure's linked list */
-                if (prev == NULL) {
-                    t->peers = curr;
-                    prev = curr;
-                } else {
-                    prev->next = curr;
-                    prev = curr;
-                }
             }
-            DEBUG("AFTER PEER LOOP\n");
-            be_dict_free(peer);
         }
         be_dict_free(entry);
     }
