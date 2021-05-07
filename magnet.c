@@ -130,6 +130,25 @@ udp_gen_conn_pkt(torrent_t *t)
     *(packet + 14) = (uint8_t)((transaction_id << 16) >> 24);
     *(packet + 15) = (uint8_t)((transaction_id << 24) >> 24);
 
+    /* Print the packet as binary */
+    if (log_verbosely) {
+        char dbg_magnum[65], dbg_transid[33], dbg_packet[137],
+            *ptr = &dbg_packet[0];
+
+        memset(dbg_magnum, 0, 65);
+        memset(dbg_transid, 0, 33);
+        memset(dbg_packet, 0, 137);
+
+        _itoa(magic_number, dbg_magnum, 2);
+        _itoa(transaction_id, dbg_transid, 2);
+        for (int i = 0; i < 16; i++) { _itoa(packet[i], ptr, 2); ptr++; }
+
+        printf("-- BEGIN PACKET --\n");
+        printf("%s00000000000000000000000000000000%s\n", dbg_magnum, dbg_transid);
+        printf("%s\n", dbg_packet);
+        printf("--- END PACKET ---\n");
+    }
+
     t->trans_id = transaction_id;
     
     return packet;
