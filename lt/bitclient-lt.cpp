@@ -18,27 +18,31 @@ static bool log_verbosely = true;
 int
 main(int argc, char *argv[])
 {
+    lt::settings_pack settings;    // Tell the session how verbose to be
+    lt::add_torrent_params params; // Tell the session what to downloaded
+    lt::torrent_handle torrent;    // The thing the session is downloading
+    // session is declared below
+
     if (argc < 2) {
         std::cerr << "Usage: ./bitclient-lt [magnet]" << std::endl;
         return -1;
     }
 
     // Register a few settings regarding verbosity
-    lt::settings_pack settings;
     settings.set_int(lt::settings_pack::alert_mask,
                      lt::alert_category::error   |
                      lt::alert_category::storage |
                      lt::alert_category::status);
 
     // Add the magnet URL
-    lt::add_torrent_params params = lt::parse_magnet_uri(argv[1]);
+    params = lt::parse_magnet_uri(argv[1]);
     params.save_path = ".";
 
     // Create the torrent session with the previous settings
     lt::session session(settings);
 
     // Control the torrent
-    lt::torrent_handle torrent = session.add_torrent(std::move(params));
+    torrent = session.add_torrent(std::move(params));
 
     std::cout << "Downloading " << params.name << "..." << std::endl;
 
