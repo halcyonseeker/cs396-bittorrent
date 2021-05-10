@@ -110,8 +110,8 @@ udp_gen_conn_pkt(torrent_t *t)
     }
 
     /* WARNING:
-    * Because of timeout issues in udo_request, I have no idea if this packet
-    * is actually valid. */
+     * Because of timeout issues in udo_request, I have no idea if this packet
+     * is actually valid. */
 
     *packet        = (uint8_t)(magic_number >> 56);
     *(packet + 1)  = (uint8_t)((magic_number << 8) >> 56);
@@ -141,12 +141,12 @@ udp_gen_conn_pkt(torrent_t *t)
 
         _itoa(magic_number, dbg_magnum, 2);
         _itoa(transaction_id, dbg_transid, 2);
-        for (int i = 0; i < 16; i++) { _itoa(packet[i], ptr, 2); ptr++; }
+        for (size_t i = 0; i < 16; i++) { _itoa(packet[i], ptr, 2); ptr++; }
 
-        printf("-- BEGIN PACKET --\n");
-        printf("%s00000000000000000000000000000000%s\n", dbg_magnum, dbg_transid);
-        printf("%s\n", dbg_packet);
-        printf("--- END PACKET ---\n");
+        DEBUG("-- BEGIN PACKET --\n");
+        DEBUG("%s00000000000000000000000000000000%s\n", dbg_magnum, dbg_transid);
+        DEBUG("%s\n", dbg_packet);
+        DEBUG("--- END PACKET ---\n");
     }
 
     t->trans_id = transaction_id;
@@ -577,17 +577,22 @@ magnet_request_tracker(torrent_t *t)
         if (!strncmp(a->url, "udp", 3)) {
             uint8_t *connect_pkt, *announce_pkt;
 
+            FATAL("The UDP tracker protocol is broken, so it'll just timeout here\n");
+
             /* Generate the handshake packet */
             if ((connect_pkt = udp_gen_conn_pkt(t)) == NULL) {
                 FATAL("Failed to generate the connection UDP packet\n");
                 return -1;
             }
 
+            DEBUG("Generated connection packet: (%s)\n", (char*)connect_pkt);
+
             /* Send and parse the intial handshake */
             if (udp_request(t, a->url, (char*)connect_pkt, body) == NULL) {
                 free(connect_pkt);
                 continue;
             }
+            DEBUG("Connection response body: (%s)\n", body);
             free(connect_pkt);
             if (udp_parse_connect(body) < 0) {
                 free(connect_pkt);
@@ -600,11 +605,14 @@ magnet_request_tracker(torrent_t *t)
                 return -1;
             }
 
+            DEBUG("Generated announce packet: (%s)\n", (char*)announce_pkt);
+
             /* Send the announce and parse the response into T */
             if (udp_request(t, a->url, (char*)announce_pkt, body) == NULL) {
                 free(announce_pkt);
                 continue;
             }
+            DEBUG("Announce response body: (%s)\n", body);
             free(announce_pkt);
             if (udp_parse_announce(t, body) < 0) {
                 free(announce_pkt);
@@ -635,6 +643,7 @@ magnet_request_tracker(torrent_t *t)
                     continue;
                 } else {
                     curl_easy_cleanup(curl);
+                    FATAL("If all went well (and you ran with -v), you should see some information,\n including a list of peers, printed on the screen.\n Sadly, this almost never happens so I haven't implemented the TCP peer protocol");
                     break;
                 }
             } else {
