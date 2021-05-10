@@ -6,6 +6,7 @@
 //
 
 #include <iostream>
+#include <iomanip>
 
 #include <libtorrent/session.hpp>
 #include <libtorrent/add_torrent_params.hpp>
@@ -13,7 +14,7 @@
 #include <libtorrent/alert_types.hpp>
 #include <libtorrent/magnet_uri.hpp>
 
-static bool log_verbosely = true;
+static bool log_verbosely = false;
 
 int
 main(int argc, char *argv[])
@@ -65,6 +66,9 @@ main(int argc, char *argv[])
             }
         }
         std::this_thread::sleep_for(std::chrono::seconds(15));
+        double dl = static_cast<double>(torrent.status().total_payload_download);
+        std::cout << std::fixed << std::setprecision(2)
+                  << dl / 1024 / 1024 << " MB Downloaded" << std::endl;
     }
     return 0;
 }
