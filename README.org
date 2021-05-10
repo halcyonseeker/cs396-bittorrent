@@ -1,7 +1,12 @@
 #+TITLE: Bitclient: A Simple BitTorrent Client
 
-This repository contains my final project for CS386 (Computer
-Networks) at Reed College.
+This repository contains two attempts at my final project for CS386
+(Computer Networks) at Reed College.
+
+- v1-broken/ contains a mostly non-functional BitTorrent client
+  written (mostly) from scratch in C.
+- v2-working/ contains a fully-functional BitTorrent client written in
+  C++ that offloads all the interesting parts to LibTorrent.
 
 * The Broken C Version
   This version lives in the v1-broken/ directory.
