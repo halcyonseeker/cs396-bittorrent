@@ -2,17 +2,64 @@
 
 * Building
 ** The Broken C Version
+   This version lives in the v1-broken/ directory.
+
    1. Download and build [[https://github.com/cwyang/bencode][this bencode library]]. (=git submodule init;
       cd bencode; make=).
    2. In the unlikely event that it isn't pre-installed, install
       [[https://curl.se/libcurl/][libcurl]].
    3. To build the program just run =make=.
 
+   My initial plan was to use C to write a program that would take a
+   .torrent file, decode it, ask one of the specified trackers for a
+   list of peers, and then download the file or files from them. I got
+   it to the point where I was able to send a HTTP request to a
+   tracker, but they all responded with errors along the lines of
+   "torrent not valid". Turns out that the bencode library I was using
+   (and another I tired), were unable to re-encode the info dictionary
+   into bencode that would produce a valid checksum.
+
+   At this point I gave up on metainfo files and rewrote it to use the
+   more modern magnet URI scheme. Unfortunately, all the magnet URIs I
+   found prefered udp trackers. I attempted to write a client for the
+   UDP tracker protocol, but was unable to figure out how to pack
+   together a valid packet.
+
+   Therefore, in order to actually get a list of peers, we need a
+   hand-crafted magnet URI that uses HTTP trackers. At this point I
+   was running rather short on time and chose to abandon this program
+   in favour of a LibTorrent wrapper discussed below. The code in the
+   old project is organised in the v1-broken/ directory as follows:
+
+   - bitclient.c   :: Contains the programs main; its responsibility
+     is to build the =torrent_t= structure with information about the
+     file we want to download, then spawning off a pair of threads to
+     concurrently download and upload chunks to and from peers.
+   - bitclient.h   :: Contains a few macros and definition of the
+     central torrent structure.
+   - magnet.(c,h)  :: Exposes a pair of functions to main, the first
+     of which parses the magnet URI and the second of which uses that
+     information to contact trackers.
+   - leecher.(c,h) :: Exposes the function to main which is
+     responsible for downloading the file from peers.
+   - seeder.(c,h)  :: Exposes the function to main which uploads
+     pieces of the file to peers.
+
+   The bak/ directory also contains *extract.(c,h)* and
+   *tracker.(c,h)*, which, in the earlier iteration of the program,
+   were responsible for decoding the metainfo file and requesting
+   information from a HTTP tracker.
+
+   Had I been able to fully implement this program
+
 ** The Boring But Working LibTorrent Version
    1. Install [[https://libtorrent.org][LibTorrent]]. Weirdly, on Arch GNU/Linux the libtorrent
       package didn't contain the C++ header files, so I had to install
       the libtorrent-rasterbar package. I believe it depends on Boost.
    2. Just run =make= in the lt/ directory.
+
+* Writeup
+  
 
 * Useful Links
   - https://en.wikipedia.org/wiki/BitTorrent
